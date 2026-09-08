@@ -3,17 +3,12 @@ import { serveStatic } from "@hono/node-server/serve-static"
 import { Hono } from "hono"
 import { errorMessage, getOpencode, ocGetJson, type OpencodeContext } from "./opencode.js"
 import { localTimezone, parseRangePreset, resolveRange } from "./ranges.js"
+import { walkSessions, type RawPage } from "./walk.js"
 
 const PAGE_LIMIT = 100
-const MAX_PAGES = 50
 const PORT = Number(process.env.PORT) || 4021
 
 const app = new Hono()
-
-interface RawPage {
-  data?: unknown
-  cursor?: { previous?: string | null; next?: string | null } | null
-}
 
 /** One page of GET /api/session, via the typed client with a raw-fetch fallback. */
 async function listPage(oc: OpencodeContext, cursor?: string): Promise<RawPage> {
@@ -112,41 +107,13 @@ app.get("/api/sessions", async (c) => {
   const range = resolveRange(preset)
   try {
     const oc = await getOpencode()
-    const out: unknown[] = []
-    let cursor: string | undefined
-    let pages = 0
-    let more = true
-    while (more && pages < MAX_PAGES) {
-      const page = await listPage(oc, cursor)
-      const rows = Array.isArray(page.data) ? page.data : []
-      out.push(...rows)
-      pages++
-      const next = page.cursor?.next ?? null
-      if (!next) {
-        more = false
-        break
-      }
-      if (range.from != null) {
-        // List order is time.updated descending: once a page's oldest
-        // updated time falls below the range start, later pages are older.
-        let oldest = Number.POSITIVE_INFINITY
-        for (const row of rows) {
-          const updated = (row as { time?: { updated?: unknown } })?.time?.updated
-          if (typeof updated === "number" && updated < oldest) oldest = updated
-        }
-        if (oldest < range.from) {
-          more = false
-          break
-        }
-      }
-      cursor = next
-    }
+    const walk = await walkSessions(range.from ?? null, (cursor) => listPage(oc, cursor))
     return c.json({
       range,
-      count: out.length,
-      pages,
-      truncated: more && pages >= MAX_PAGES,
-      data: out,
+      count: walk.rows.length,
+      pages: walk.pages,
+      truncated: walk.truncated,
+      data: walk.rows,
     })
   } catch (err) {
     return c.json({ error: `opencode service request failed: ${errorMessage(err)}` }, 502)
