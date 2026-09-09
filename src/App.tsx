@@ -235,9 +235,40 @@ export function App() {
               session list instead
             </div>
           )}
+          {/* Mission 023: the filter row lives in a fixed slot after the
+              hero/KPI area, ahead of the conditional card, so picking or
+              clearing a filter never moves the row vertically. Mission 020:
+              both comboboxes render ALWAYS on the same rule as before —
+              one directory, zero directories, or a held filter matching
+              nothing in this range all keep the controls on screen. */}
+          <div className="filters-row" role="group" aria-label="Filters">
+            <div className="filter">
+              Project{" "}
+              <FilterCombobox
+                ariaLabel="Filter projects"
+                placeholder="Filter projects…"
+                options={projectFilterOptions}
+                value={directory}
+                onChange={setDirectory}
+              />
+            </div>
+            <div className="filter">
+              Model{" "}
+              <FilterCombobox
+                ariaLabel="Filter models"
+                placeholder="Filter models…"
+                options={modelFilterOptions}
+                value={model}
+                onChange={setModel}
+                align="right"
+              />
+            </div>
+          </div>
           {/* Mission 014 (PD, Q5a): the filtered card renders whenever any
               filter is active, no dismiss state of its own; it recomputes
-              from the poll's payloads. The hero above stays global. */}
+              from the poll's payloads. The hero above stays global. Slot
+              per Mission 023: below the fixed filter row, above the
+              Sessions section. */}
           {(directory !== "" || model !== "") && (
             <FilterSummaryCard
               rows={filteredRows}
@@ -254,6 +285,10 @@ export function App() {
             <div className="section-head">
               <h2>Sessions</h2>
               <div className="section-tools">
+                {/* Mission 023: the two filter comboboxes moved up to the
+                    fixed .filters-row slot after the hero/KPI area (Mission
+                    020's always-visible rule unchanged, just relocated);
+                    the head keeps the expand/collapse controls only. */}
                 {treeHasParents && (
                   <div className="tree-controls" role="group" aria-label="Tree expansion">
                     <button type="button" onClick={expandAll}>
@@ -264,35 +299,6 @@ export function App() {
                     </button>
                   </div>
                 )}
-                {/* Mission 020 (Captain's pick): the project combobox renders
-                    ALWAYS — one directory, zero directories, or a held filter
-                    matching nothing in this range all keep the control on
-                    screen, so a filter picked under another range stays
-                    visible (and clearable) after a range switch. */}
-                <div className="filter">
-                  Project{" "}
-                  <FilterCombobox
-                    ariaLabel="Filter projects"
-                    placeholder="Filter projects…"
-                    options={projectFilterOptions}
-                    value={directory}
-                    onChange={setDirectory}
-                  />
-                </div>
-                {/* Mission 020: the model combobox renders ALWAYS on the same
-                    rule, including ranges with no model options (the All/zero
-                    state, or the held chip at 0 via withStaleOption). */}
-                <div className="filter">
-                  Model{" "}
-                  <FilterCombobox
-                    ariaLabel="Filter models"
-                    placeholder="Filter models…"
-                    options={modelFilterOptions}
-                    value={model}
-                    onChange={setModel}
-                    align="right"
-                  />
-                </div>
               </div>
             </div>
             {sessions?.truncated && (

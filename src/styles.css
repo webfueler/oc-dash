@@ -309,6 +309,18 @@ section {
   flex-wrap: wrap;
 }
 
+/* Mission 023: the filter row's fixed slot, between the KPI hero and the
+   conditional filtered card. Same flex vocabulary as .section-tools and the
+   20px rhythm of .kpis/.fcard, so the gap holds whether the card is present
+   or not and the row never moves when a filter is picked or cleared. */
+.filters-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
 /* P2: expand/collapse-all in the section head */
 .tree-controls {
   display: flex;
