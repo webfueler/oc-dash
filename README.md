@@ -42,6 +42,29 @@ when the tab becomes visible again.
 - A running local opencode2 service (the app only ever issues read-only GETs
   and never stops or restarts the service)
 
+## Run without cloning
+
+```sh
+npx oc-dash
+```
+
+Needs Node 22+ and npm. Serves the built frontend and API from a single
+process on http://localhost:4021 (override with `PORT`, e.g.
+`PORT=4022 npx oc-dash`).
+
+The dashboard only reads from the opencode2 service, which must already
+be installed and running. When no registered service answers the
+startup probe, oc-dash prints a short message and exits non-zero — it
+never starts, stops, or restarts a service. Start the service with:
+
+```sh
+opencode serve --service
+```
+
+If you don't have opencode yet, install it with
+`curl -fsSL https://opencode.ai/install | bash` (more options at
+https://opencode.ai).
+
 ## Install
 
 ```sh
@@ -109,11 +132,17 @@ falls back to totals computed from the session list (marked as degraded).
 
 ## How it connects
 
-The backend uses `@opencode/client` (pinned to the `beta` dist-tag):
-`Service.discover()` finds a healthy registered service without starting one;
-`Service.ensure()` is the fallback and may auto-start a service when none is
-registered. Calls go through the typed client with a raw-fetch fallback
-(`Service.headers(endpoint)` auth attached).
+The backend uses `@opencode/client` (pinned to the `beta` dist-tag) and is
+discover-only: `Service.discover()` finds a healthy registered service and
+never starts, stops, or restarts one. If nothing healthy is registered when
+the dashboard starts, it prints a short message (start `opencode serve
+--service`) and exits. If the service dies later, the UI shows its degraded
+state instead of crashing. Calls go through the typed client with a raw-fetch
+fallback (`Service.headers(endpoint)` auth attached).
+
+The discovered endpoint is cached for the life of the dashboard process, so
+if the opencode service comes back on a different port, restart the
+dashboard too.
 
 ## Estimate caveats (read before quoting numbers)
 
@@ -134,6 +163,7 @@ registered. Calls go through the typed client with a raw-fetch fallback
 server/          Hono backend (entry, service connection, range mapping)
 src/             React frontend (components, tree/rollup logic, formatting)
 src/*.test.ts    Unit tests (vitest)
+bin/oc-dash.js   npx launcher (runs the compiled server)
 dist/            Built frontend (gitignored)
 dist-server/     Compiled server (gitignored)
 ```

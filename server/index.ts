@@ -1,12 +1,18 @@
 import { serve } from "@hono/node-server"
 import { serveStatic } from "@hono/node-server/serve-static"
 import { Hono } from "hono"
+import { fileURLToPath } from "node:url"
 import { errorMessage, getOpencode, ocGetJson, type OpencodeContext } from "./opencode.js"
 import { contextStatsRange, localTimezone, parseRangePreset, resolveRange } from "./ranges.js"
 import { walkSessions, type RawPage } from "./walk.js"
 
 const PAGE_LIMIT = 100
 const PORT = Number(process.env.PORT) || 4021
+
+// Absolute paths so the server works from any working directory (npx runs
+// the launcher from wherever the user happens to be).
+const DIST_ROOT = fileURLToPath(new URL("../dist", import.meta.url))
+const DIST_INDEX = fileURLToPath(new URL("../dist/index.html", import.meta.url))
 
 const app = new Hono()
 
@@ -141,9 +147,45 @@ app.get("/api/sessions", async (c) => {
 })
 
 // Built frontend (production). API routes above take precedence.
-app.use("*", serveStatic({ root: "./dist" }))
-app.get("*", serveStatic({ path: "./dist/index.html" }))
+app.use("*", serveStatic({ root: DIST_ROOT }))
+app.get("*", serveStatic({ path: DIST_INDEX }))
 
-serve({ fetch: app.fetch, port: PORT }, (info) => {
-  console.log(`oc-dash listening on http://localhost:${info.port}`)
+/**
+ * Discover-only policy: the dashboard needs a healthy registered opencode
+ * service before it starts. It never starts, stops, or restarts one, so
+ * when nothing answers the discovery probe, print guidance and quit.
+ */
+async function checkServiceAtStartup(): Promise<void> {
+  try {
+    await getOpencode()
+  } catch (err) {
+    console.error(`${errorMessage(err)}
+
+No running opencode service was found. The dashboard reads everything
+from the opencode2 service over HTTP, so opencode must be installed and
+a service must be running. Start the service, then run oc-dash again:
+
+    opencode serve --service
+
+If you don't have opencode yet, install it with:
+
+    curl -fsSL https://opencode.ai/install | bash
+
+More options: https://opencode.ai`)
+    process.exit(1)
+  }
+}
+
+await checkServiceAtStartup()
+
+const server = serve({ fetch: app.fetch, port: PORT, hostname: "127.0.0.1" }, (info) => {
+  console.log(`oc-dash listening on http://127.0.0.1:${info.port}`)
+})
+
+server.on("error", (err) => {
+  if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
+    console.error(`port ${PORT} is in use, try PORT=${PORT + 1} oc-dash`)
+    process.exit(1)
+  }
+  throw err
 })
