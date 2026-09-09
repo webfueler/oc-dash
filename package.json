@@ -1,5 +1,5 @@
 {
-  "name": "oc-dash",
+  "name": "@webfueler/oc-dash",
   "version": "0.1.0",
   "description": "Local dashboard for opencode2 session costs, token totals, and subagent spend",
   "license": "MIT",
@@ -15,6 +15,9 @@
     "dist",
     "dist-server"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "tsx watch server/index.ts",

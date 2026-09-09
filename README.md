@@ -45,12 +45,19 @@ when the tab becomes visible again.
 ## Run without cloning
 
 ```sh
-npx oc-dash
+npx @webfueler/oc-dash
 ```
 
 Needs Node 22+ and npm. Serves the built frontend and API from a single
 process on http://localhost:4021 (override with `PORT`, e.g.
-`PORT=4022 npx oc-dash`).
+`PORT=4022 npx @webfueler/oc-dash`).
+
+Prefer the short command? A global install puts it on your PATH:
+
+```sh
+npm i -g @webfueler/oc-dash
+oc-dash
+```
 
 The dashboard only reads from the opencode2 service, which must already
 be installed and running. When no registered service answers the

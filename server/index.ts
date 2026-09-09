@@ -184,7 +184,7 @@ const server = serve({ fetch: app.fetch, port: PORT, hostname: "127.0.0.1" }, (i
 
 server.on("error", (err) => {
   if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
-    console.error(`port ${PORT} is in use, try PORT=${PORT + 1} oc-dash`)
+    console.error(`port ${PORT} is in use, try PORT=${PORT + 1} npx @webfueler/oc-dash`)
     process.exit(1)
   }
   throw err
