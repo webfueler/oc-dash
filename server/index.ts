@@ -93,19 +93,18 @@ app.get("/api/summary", async (c) => {
       throw new Error("unexpected /api/session/stats payload shape")
     }
     // Additive, Today-only: trailing 7 days of activity so the chart can
-    // render the in-range day next to muted context days. Best effort — the
-    // response is served without it when the extra call fails.
+    // render the in-range day next to muted context days. Fired in parallel
+    // with the main stats call (mission 008, 007's F4) so Today pays one
+    // upstream round-trip instead of two serial ones. Still best effort: a
+    // failed context call resolves to undefined and the field is omitted.
     let contextActivity: unknown
     const ctxRange = contextStatsRange(preset)
-    if (ctxRange) {
-      try {
-        const ctxRaw = await statsCall(oc, ctxRange, tz)
-        const ctxData = (ctxRaw as { data?: unknown })?.data ?? ctxRaw
-        const act = (ctxData as { activity?: unknown } | null)?.activity
-        if (Array.isArray(act)) contextActivity = act
-      } catch {
-        // context is optional
-      }
+    const ctxCall = ctxRange ? statsCall(oc, ctxRange, tz).catch(() => undefined) : undefined
+    if (ctxCall) {
+      const ctxRaw = await ctxCall
+      const ctxData = (ctxRaw as { data?: unknown } | null)?.data ?? ctxRaw
+      const act = (ctxData as { activity?: unknown } | null)?.activity
+      if (Array.isArray(act)) contextActivity = act
     }
     return c.json({
       degraded: false,

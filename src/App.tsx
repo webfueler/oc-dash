@@ -6,8 +6,7 @@ import { KpiHeader } from "./components/KpiHeader"
 import { ModelsTable } from "./components/ModelsTable"
 import { RangeTabs } from "./components/RangeTabs"
 import { SessionsTable } from "./components/SessionsTable"
-import { isoDate } from "./format"
-import { modelRows } from "./summary"
+import { modelRows, todayAccentDate } from "./summary"
 import { allParentIds, buildTree } from "./tree"
 
 const POLL_MS = 30_000
@@ -121,9 +120,12 @@ export function App() {
   const okSummary = summary && !summary.degraded ? summary : undefined
   const activity = okSummary?.data.activity
   const contextActivity = okSummary?.contextActivity
-  // Today's chart accents the in-range day (local midnight from the stats window).
-  const accentDate =
-    range === "today" && okSummary?.data.range.from != null ? isoDate(okSummary.data.range.from) : null
+  // Today's chart accents the in-range day (local midnight from the stats
+  // window). Mission 008 (007's F2): gated on the payload's own preset, not
+  // the active range state, so a stale non-today payload that is still on
+  // screen after a switch to Today renders as a plain chart instead of
+  // accenting a date that matches no bar (which muted every bar).
+  const accentDate = todayAccentDate(okSummary)
 
   return (
     <div className="app">

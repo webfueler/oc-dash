@@ -3,6 +3,7 @@ import { fmtInt, fmtTokens, fmtUSD } from "../format"
 import {
   costPerDay,
   fallbackTotals,
+  heroRange,
   kpisFromFallback,
   kpisFromStats,
   rangeLabel,
@@ -13,6 +14,9 @@ import {
  * P1: one hero card for the number the dashboard exists to show, with the
  * other stats demoted to a compact strip. Works in degraded mode too — the
  * fallback badge rides on the hero and the strip shows the fallback totals.
+ * Mission 008 (007's F1): the range label comes from the same payload as the
+ * value (heroRange), so a range switch never shows the new label over the
+ * previous range's numbers — both flip together when the fetch lands.
  */
 export function KpiHeader({
   summary,
@@ -30,8 +34,9 @@ export function KpiHeader({
     kpis = kpisFromFallback(fallbackTotals(sessions.data))
   }
   if (!kpis) return null
+  const labelRange = heroRange(summary, sessions, range)
   const statsWindow = summary && !summary.degraded ? summary.data.range : undefined
-  const perDay = costPerDay(kpis.cost, range, statsWindow)
+  const perDay = costPerDay(kpis.cost, labelRange, statsWindow)
   const sub: string[] = []
   if (perDay != null) sub.push(`≈ ${fmtUSD(perDay)}/day`)
   if (kpis.subagents != null) sub.push(`includes ${fmtInt(kpis.subagents)} subagent sessions`)
@@ -39,7 +44,7 @@ export function KpiHeader({
     <section className="kpis" aria-label="Totals">
       <div className="hero-kpi">
         <div className="hero-main">
-          <div className="hero-label">Total cost · {rangeLabel(range)}</div>
+          <div className="hero-label">Total cost · {rangeLabel(labelRange)}</div>
           <div className="hero-value">{fmtUSD(kpis.cost)}</div>
           {sub.length > 0 && <div className="hero-sub">{sub.join(" · ")}</div>}
           {kpis.source === "fallback" && (

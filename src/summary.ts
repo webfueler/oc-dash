@@ -1,4 +1,13 @@
-import type { ModelUsage, Range, SessionInfo, SessionStatsInfo } from "./api"
+import type {
+  ModelUsage,
+  Range,
+  SessionInfo,
+  SessionStatsInfo,
+  SessionsPayload,
+  SummaryOk,
+  SummaryResponse,
+} from "./api"
+import { isoDate } from "./format"
 import { tokenTotal } from "./tree"
 
 /** P1 hero label: the range in plain words. */
@@ -11,6 +20,39 @@ const RANGE_LABELS: Record<Range, string> = {
 
 export function rangeLabel(range: Range): string {
   return RANGE_LABELS[range]
+}
+
+/**
+ * Mission 008 (007's F1): the hero's label must come from the same payload
+ * as its value, so the page's primary answer never shows one range's number
+ * under another range's label. The label therefore tracks the payload that
+ * fed the KPIs — the stats summary when it is healthy, otherwise the session
+ * list that degraded mode totals from — and only falls back to the active
+ * range when no payload is on screen. During a range switch this keeps the
+ * previous range's label over its own numbers until the new payload lands;
+ * label and value then flip together in the same render.
+ */
+export function heroRange(
+  summary: SummaryResponse | null | undefined,
+  sessions: SessionsPayload | null | undefined,
+  active: Range,
+): Range {
+  if (summary && !summary.degraded) return summary.range.preset
+  if (sessions) return sessions.range.preset
+  return active
+}
+
+/**
+ * Mission 008 (007's F2): the Today chart's accent date, derived from the
+ * summary payload's own preset instead of the active range state. A stale
+ * non-today payload can be on screen right after a switch to Today; gating
+ * on the payload keeps the accent matched to the chart's own data (a stale
+ * payload renders as a plain chart, never as all bars muted).
+ */
+export function todayAccentDate(summary?: SummaryOk | null): string | null {
+  if (!summary || summary.range.preset !== "today") return null
+  const from = summary.data.range.from
+  return from == null ? null : isoDate(from)
 }
 
 /**

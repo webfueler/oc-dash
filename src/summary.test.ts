@@ -1,13 +1,23 @@
 import { describe, expect, it } from "vitest"
-import type { SessionInfo, SessionStatsInfo, TokenUsage } from "./api"
+import type {
+  Range,
+  SessionInfo,
+  SessionStatsInfo,
+  SessionsPayload,
+  SummaryDegraded,
+  SummaryOk,
+  TokenUsage,
+} from "./api"
 import { sess } from "./tree.test"
 import {
   costPerDay,
   fallbackTotals,
+  heroRange,
   kpisFromFallback,
   kpisFromStats,
   modelRows,
   rangeLabel,
+  todayAccentDate,
 } from "./summary"
 
 const zeroTokens: TokenUsage = {
@@ -217,5 +227,96 @@ describe("P1 hero mapping", () => {
 
   it("treats non-finite cost as unpriced rather than a number", () => {
     expect(costPerDay(Number.NaN, "7d")).toBeNull()
+  })
+})
+
+/** Minimal healthy summary envelope for one preset; data fields are dummies. */
+const statsOk = (preset: Range): SummaryOk => ({
+  degraded: false,
+  range: { preset },
+  timezone: "UTC",
+  data: {
+    range: { from: 0, to: 1 },
+    sessions: 1,
+    subagents: 0,
+    prompts: 0,
+    steps: 0,
+    tokens: zeroTokens,
+    cost: 1,
+    activeDays: 1,
+    streak: 1,
+    activity: [],
+    models: [],
+  },
+})
+
+describe("mission 008: hero label and payload in lockstep", () => {
+  const degraded = (preset: Range): SummaryDegraded => ({
+    degraded: true,
+    range: { preset },
+    timezone: "UTC",
+    reason: "stats unavailable",
+  })
+  const sessionsFor = (preset: Range): SessionsPayload => ({
+    range: { preset },
+    count: 1,
+    pages: 1,
+    truncated: false,
+    data: [sess({ id: "s1" })],
+  })
+
+  it("labels the hero from the summary payload, not the active range", () => {
+    // A switch to 7d while the 30d payload is still on screen: the hero must
+    // keep describing the numbers it shows (007's F1).
+    expect(heroRange(statsOk("30d"), sessionsFor("7d"), "7d")).toBe("30d")
+    expect(heroRange(statsOk("7d"), sessionsFor("7d"), "30d")).toBe("7d")
+  })
+
+  it("agrees with the active range once the payloads settle", () => {
+    expect(heroRange(statsOk("7d"), sessionsFor("7d"), "7d")).toBe("7d")
+    expect(heroRange(statsOk("today"), sessionsFor("today"), "today")).toBe("today")
+  })
+
+  it("falls back to the session list's preset in degraded mode", () => {
+    // Degraded totals come from the session rows, so that payload owns the label.
+    expect(heroRange(degraded("today"), sessionsFor("7d"), "today")).toBe("7d")
+  })
+
+  it("follows the session list when no summary has landed", () => {
+    expect(heroRange(null, sessionsFor("30d"), "7d")).toBe("30d")
+  })
+
+  it("falls back to the active range when no payload is available", () => {
+    expect(heroRange(null, null, "all")).toBe("all")
+    expect(heroRange(degraded("7d"), null, "7d")).toBe("7d")
+  })
+})
+
+describe("mission 008: today accent from the payload's own preset", () => {
+  // Local noon on a fixed date, so isoDate is timezone-independent.
+  const from = new Date(2026, 8, 9, 12).getTime()
+
+  it("accents the in-range day of a today payload", () => {
+    const s = statsOk("today")
+    s.data.range = { from, to: from + 1 }
+    expect(todayAccentDate(s)).toBe("2026-09-09")
+  })
+
+  it("never accents a non-today payload, even one with a window", () => {
+    // 007's F2: a stale non-today summary resolving while the Today tab is
+    // active used to yield an accent date matching no bar (all bars muted).
+    for (const preset of ["7d", "30d", "all"] as Range[]) {
+      const s = statsOk(preset)
+      s.data.range = { from, to: from + 1 }
+      expect(todayAccentDate(s)).toBeNull()
+    }
+  })
+
+  it("returns null without a window start or without a payload", () => {
+    const s = statsOk("today")
+    s.data.range = { to: from } as unknown as SessionStatsInfo["range"]
+    expect(todayAccentDate(s)).toBeNull()
+    expect(todayAccentDate(undefined)).toBeNull()
+    expect(todayAccentDate(null)).toBeNull()
   })
 })
