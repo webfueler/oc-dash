@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { contextStatsRange, resolveRange } from "./ranges.js"
+import { contextStatsRange, parseProjectParam, resolveRange } from "./ranges.js"
 
 describe("contextStatsRange", () => {
   it("gives Today the trailing 7 days as chart context", () => {
@@ -16,5 +16,28 @@ describe("contextStatsRange", () => {
     expect(contextStatsRange("7d", now)).toBeNull()
     expect(contextStatsRange("30d", now)).toBeNull()
     expect(contextStatsRange("all", now)).toBeNull()
+  })
+})
+
+// Mission 014 (PD Q4a): the additive project pass-through's parsing.
+describe("parseProjectParam", () => {
+  it("keeps a plain project id", () => {
+    expect(parseProjectParam("oc-setup")).toBe("oc-setup")
+  })
+
+  it("trims surrounding whitespace", () => {
+    expect(parseProjectParam("  oc-setup ")).toBe("oc-setup")
+  })
+
+  it("treats missing, empty, and whitespace-only as no project", () => {
+    expect(parseProjectParam(undefined)).toBeUndefined()
+    expect(parseProjectParam(null)).toBeUndefined()
+    expect(parseProjectParam("")).toBeUndefined()
+    expect(parseProjectParam("   ")).toBeUndefined()
+  })
+
+  it("rejects overlong junk instead of truncating into a wrong id", () => {
+    expect(parseProjectParam("x".repeat(201))).toBeUndefined()
+    expect(parseProjectParam("x".repeat(200))).toBe("x".repeat(200))
   })
 })

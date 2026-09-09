@@ -69,6 +69,22 @@ export interface SummaryOk {
    * `data.activity`) so the chart can show the in-range day in context.
    */
   contextActivity?: ActivityDay[]
+  /**
+   * Mission 014 (PD Q4a): additive, present only when the request carried
+   * project=<id> and the extra upstream stats call succeeded. The project
+   * id is echoed so the client can match the field to the filter on screen
+   * before trusting its numbers.
+   */
+  projectStats?: ProjectStats
+}
+
+/**
+ * Mission 014 (PD Q4a): the per-project stats payload behind the filtered
+ * card's tier-2 tiles. Same stats shape as `data`, scoped to one project.
+ */
+export interface ProjectStats {
+  project: string
+  data: SessionStatsInfo
 }
 
 export interface SummaryDegraded {
@@ -104,8 +120,14 @@ async function getJson<T>(path: string): Promise<T> {
   return (await res.json()) as T
 }
 
-export function fetchSummary(range: Range): Promise<SummaryResponse> {
-  return getJson(`/api/summary?range=${range}`)
+/**
+ * Mission 014 (PD Q4a): optional project pass-through. Existing callers are
+ * unaffected — the param is sent only while the tier-2 gate wants it, and
+ * /api/summary without it returns exactly today's keys.
+ */
+export function fetchSummary(range: Range, project?: string): Promise<SummaryResponse> {
+  const suffix = project ? `&project=${encodeURIComponent(project)}` : ""
+  return getJson(`/api/summary?range=${range}${suffix}`)
 }
 
 export function fetchSessions(range: Range): Promise<SessionsPayload> {

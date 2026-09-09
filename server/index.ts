@@ -3,7 +3,7 @@ import { serveStatic } from "@hono/node-server/serve-static"
 import { Hono } from "hono"
 import { fileURLToPath } from "node:url"
 import { errorMessage, getOpencode, ocGetJson, type OpencodeContext } from "./opencode.js"
-import { contextStatsRange, localTimezone, parseRangePreset, resolveRange } from "./ranges.js"
+import { contextStatsRange, localTimezone, parseProjectParam, parseRangePreset, resolveRange } from "./ranges.js"
 import { walkSessions, type RawPage } from "./walk.js"
 
 const PAGE_LIMIT = 100
@@ -28,11 +28,17 @@ async function listPage(oc: OpencodeContext, cursor?: string): Promise<RawPage> 
   }
 }
 
-/** session.stats via the typed client with a raw-fetch fallback. */
+/**
+ * session.stats via the typed client with a raw-fetch fallback.
+ * Mission 014 (PD Q4a): an optional project pass-through — the upstream
+ * param already exists (project id); only the per-project tier-2 call
+ * sends it, the hero's main stats call never does.
+ */
 async function statsCall(
   oc: OpencodeContext,
   range: { from?: number; to?: number },
   tz: string,
+  project?: string,
 ): Promise<unknown> {
   try {
     return await oc.client.session.stats({
@@ -40,11 +46,13 @@ async function statsCall(
       to: range.to,
       timezone: tz,
       tools: "summary",
+      ...(project ? { project } : {}),
     })
   } catch {
     const params = new URLSearchParams({ timezone: tz, tools: "summary" })
     if (range.from != null) params.set("from", String(range.from))
     if (range.to != null) params.set("to", String(range.to))
+    if (project) params.set("project", project)
     return await ocGetJson(oc, `/api/session/stats?${params}`)
   }
 }
@@ -84,8 +92,15 @@ app.get("/api/summary", async (c) => {
   }
   const range = resolveRange(preset)
   const tz = localTimezone()
+  // Mission 014 (PD Q4a): additive project param. When present, ONE extra
+  // best-effort upstream stats call with project=<id> feeds the filtered
+  // card's tier-2 tiles. Fired in parallel with the main call so the hero's
+  // latency is untouched; on failure it resolves to undefined and the field
+  // is omitted (the contextActivity pattern), never an error surface.
+  const project = parseProjectParam(c.req.query("project"))
   try {
     const oc = await getOpencode()
+    const projectCall = project ? statsCall(oc, range, tz, project).catch(() => undefined) : undefined
     const raw = await statsCall(oc, range, tz)
     // The promise client returns SessionStatsInfo directly; a raw fetch
     // returns { data: SessionStatsInfo }. Normalize both.
@@ -97,6 +112,20 @@ app.get("/api/summary", async (c) => {
       !Array.isArray((data as { models?: unknown }).models)
     ) {
       throw new Error("unexpected /api/session/stats payload shape")
+    }
+    let projectStats: { project: string; data: unknown } | undefined
+    if (project && projectCall) {
+      const pRaw = await projectCall
+      const pData = (pRaw as { data?: unknown } | null)?.data ?? pRaw
+      if (
+        pData &&
+        typeof pData === "object" &&
+        typeof (pData as { cost?: unknown }).cost === "number"
+      ) {
+        // The project id rides along so the client can verify the field
+        // belongs to the filter currently on screen before trusting it.
+        projectStats = { project, data: pData }
+      }
     }
     // Additive, Today-only: trailing 7 days of activity so the chart can
     // render the in-range day next to muted context days. Fired in parallel
@@ -118,6 +147,7 @@ app.get("/api/summary", async (c) => {
       timezone: tz,
       data,
       ...(contextActivity !== undefined ? { contextActivity } : {}),
+      ...(projectStats !== undefined ? { projectStats } : {}),
     })
   } catch (err) {
     // Degraded marker instead of an error page when stats are unavailable.

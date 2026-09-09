@@ -8,14 +8,20 @@ import type {
   SummaryOk,
   TokenUsage,
 } from "./api"
+import { NO_MODEL_KEY, applyFilters } from "./filters"
 import { sess } from "./tree.test"
 import {
+  cardRange,
   costPerDay,
   fallbackTotals,
+  filterCardLabel,
+  filterCardTier,
   heroRange,
   kpisFromFallback,
   kpisFromStats,
   modelRows,
+  projectIDForDirectory,
+  projectStatsUsable,
   rangeLabel,
   todayAccentDate,
 } from "./summary"
@@ -318,5 +324,210 @@ describe("mission 008: today accent from the payload's own preset", () => {
     expect(todayAccentDate(s)).toBeNull()
     expect(todayAccentDate(undefined)).toBeNull()
     expect(todayAccentDate(null)).toBeNull()
+  })
+})
+
+// Mission 014 (PD): the filtered-totals card's pure logic.
+describe("mission 014: filter card gating (tier 2 needs project and no model)", () => {
+  it("enables tier 2 for a project filter alone", () => {
+    expect(filterCardTier("/tmp/proj", "")).toBe("tier2")
+  })
+
+  it("hides tier 2 for a model filter alone", () => {
+    expect(filterCardTier("", "p/m · max")).toBe("tier1")
+  })
+
+  it("hides tier 2 when both filters are active", () => {
+    // Upstream cannot apply the model cut, so the project stats would lie.
+    expect(filterCardTier("/tmp/proj", "p/m · max")).toBe("tier1")
+  })
+
+  it("treats the no-model bucket as a model filter", () => {
+    expect(filterCardTier("/tmp/proj", NO_MODEL_KEY)).toBe("tier1")
+    expect(filterCardTier("", NO_MODEL_KEY)).toBe("tier1")
+  })
+
+  it("keeps tier 1 (not tier 2) when no filter is set", () => {
+    expect(filterCardTier("", "")).toBe("tier1")
+  })
+})
+
+describe("mission 014: project id derived from the rows", () => {
+  it("returns the directory's most common project id", () => {
+    const dirRows: SessionInfo[] = [
+      sess({ id: "a", projectID: "proj" }),
+      sess({ id: "b", projectID: "proj" }),
+      sess({ id: "c", projectID: "other" }),
+    ]
+    expect(projectIDForDirectory(dirRows, "/tmp/proj")).toBe("proj")
+  })
+
+  it("counts only the directory's own rows", () => {
+    const dirRows: SessionInfo[] = [
+      sess({ id: "a", projectID: "proj" }),
+      sess({ id: "b", projectID: "elsewhere", location: { directory: "/tmp/other" } }),
+    ]
+    expect(projectIDForDirectory(dirRows, "/tmp/proj")).toBe("proj")
+  })
+
+  it("keeps the first seen id on a tie", () => {
+    const dirRows: SessionInfo[] = [
+      sess({ id: "a", projectID: "first" }),
+      sess({ id: "b", projectID: "second" }),
+    ]
+    expect(projectIDForDirectory(dirRows, "/tmp/proj")).toBe("first")
+  })
+
+  it("returns null when the filter matches nothing or rows lack the id", () => {
+    expect(projectIDForDirectory([sess({ id: "a", projectID: "proj" })], "/tmp/nowhere")).toBeNull()
+    const noID = sess({ id: "a" })
+    delete (noID as { projectID?: string }).projectID
+    expect(projectIDForDirectory([noID], "/tmp/proj")).toBeNull()
+  })
+
+  it("returns null for no filter at all", () => {
+    expect(projectIDForDirectory([sess({ id: "a", projectID: "proj" })], "")).toBeNull()
+  })
+
+  it("ignores stray rows without a project id while counting the rest", () => {
+    const mixed: SessionInfo[] = [
+      sess({ id: "a", projectID: "proj" }),
+      sess({ id: "b", projectID: "proj" }),
+    ]
+    delete (mixed[1] as { projectID?: string }).projectID
+    expect(projectIDForDirectory(mixed, "/tmp/proj")).toBe("proj")
+  })
+})
+
+describe("mission 014: filter card label", () => {
+  it("uses the project basename, not the full path", () => {
+    expect(filterCardLabel("/Users/joaosantos/Sites/personal/oc-setup", "")).toBe("oc-setup")
+  })
+
+  it("uses the model's short id · variant form, matching the artifact", () => {
+    expect(filterCardLabel("", "opencode-go/glm-5.3-flash · max")).toBe("glm-5.3-flash · max")
+  })
+
+  it("renders the no-model bucket as 'no model'", () => {
+    expect(filterCardLabel("", NO_MODEL_KEY)).toBe("no model")
+  })
+
+  it("joins both filters when both are active", () => {
+    expect(filterCardLabel("/tmp/proj", "p/m · max")).toBe("proj · m · max")
+  })
+
+  it("is empty when no filter is set", () => {
+    expect(filterCardLabel("", "")).toBe("")
+  })
+})
+
+describe("mission 014: card label range tracks the rows' payload", () => {
+  const sessionsFor = (preset: Range): SessionsPayload => ({
+    range: { preset },
+    count: 1,
+    pages: 1,
+    truncated: false,
+    data: [sess({ id: "s1" })],
+  })
+
+  it("labels the card from the session payload, not the active range", () => {
+    expect(cardRange(sessionsFor("30d"), "7d")).toBe("30d")
+  })
+
+  it("agrees with the active range once the payloads settle", () => {
+    expect(cardRange(sessionsFor("7d"), "7d")).toBe("7d")
+  })
+
+  it("falls back to the active range when no payload is on screen", () => {
+    expect(cardRange(null, "all")).toBe("all")
+  })
+})
+
+describe("mission 014: tier-2 zeros guard", () => {
+  it("accepts a payload that counts sessions", () => {
+    expect(projectStatsUsable({ sessions: 15, subagents: 114 }, 129, 100)).toBe(true)
+  })
+
+  it("accepts zeros only when the rows themselves show none", () => {
+    expect(projectStatsUsable({ sessions: 0, subagents: 0 }, 0, 0)).toBe(true)
+    expect(projectStatsUsable({ sessions: 0, subagents: 0 }, 129, 100)).toBe(false)
+  })
+
+  it("treats a missing payload as unusable", () => {
+    expect(projectStatsUsable(undefined, 129, 100)).toBe(false)
+    expect(projectStatsUsable(null, 0, 0)).toBe(false)
+  })
+})
+
+describe("mission 014: tier-1 totals come from the filtered rows", () => {
+  // Two directories, two model triples, one subagent, so every filter
+  // combination moves the numbers.
+  const rows: SessionInfo[] = [
+    sess({
+      id: "r1",
+      cost: 1,
+      tokens: { input: 100, output: 10, reasoning: 0, cache: { read: 0, write: 0 } },
+      model: { providerID: "p", id: "m", variant: "max" },
+    }),
+    sess({
+      id: "r2",
+      cost: 0.5,
+      tokens: { input: 40, output: 5, reasoning: 0, cache: { read: 0, write: 0 } },
+      model: { providerID: "p", id: "m", variant: "default" },
+    }),
+    sess({
+      id: "s1",
+      parentID: "r1",
+      cost: 0.25,
+      tokens: { input: 10, output: 1, reasoning: 0, cache: { read: 0, write: 0 } },
+      model: { providerID: "p", id: "m", variant: "max" },
+      location: { directory: "/tmp/other" },
+    }),
+  ]
+
+  it("sums only the project filter's rows, subagents included", () => {
+    const k = kpisFromFallback(fallbackTotals(applyFilters(rows, "/tmp/proj", "")))
+    expect(k.cost).toBeCloseTo(1.5, 6)
+    expect(k.tokens).toBe(155)
+    expect(k.sessions).toBe(2)
+    expect(k.subagents).toBe(0)
+  })
+
+  it("sums only the model filter's rows across directories", () => {
+    const k = kpisFromFallback(fallbackTotals(applyFilters(rows, "", "p/m · max")))
+    expect(k.cost).toBeCloseTo(1.25, 6)
+    expect(k.tokens).toBe(121)
+    expect(k.sessions).toBe(1)
+    expect(k.subagents).toBe(1)
+  })
+
+  it("sums the intersection when both filters are active", () => {
+    const k = kpisFromFallback(fallbackTotals(applyFilters(rows, "/tmp/proj", "p/m · max")))
+    expect(k.cost).toBeCloseTo(1, 6)
+    expect(k.tokens).toBe(110)
+    expect(k.sessions).toBe(1)
+    expect(k.subagents).toBe(0)
+  })
+
+  it("keeps the stats-only fields null in every case", () => {
+    for (const [dir, model] of [
+      ["/tmp/proj", ""],
+      ["", "p/m · max"],
+      ["/tmp/proj", "p/m · max"],
+    ] as const) {
+      const k = kpisFromFallback(fallbackTotals(applyFilters(rows, dir, model)))
+      expect(k.prompts).toBeNull()
+      expect(k.steps).toBeNull()
+      expect(k.activeDays).toBeNull()
+      expect(k.streak).toBeNull()
+    }
+  })
+
+  it("sums to zeros when the filters match nothing", () => {
+    const k = kpisFromFallback(fallbackTotals(applyFilters(rows, "/tmp/nowhere", "")))
+    expect(k.cost).toBe(0)
+    expect(k.tokens).toBe(0)
+    expect(k.sessions).toBe(0)
+    expect(k.subagents).toBe(0)
   })
 })

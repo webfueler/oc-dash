@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <title>oc-dash</title>
+    <!-- Mission 015 (PB): pre-paint theme, the artifact's script sketch
+         (plan-filters-theme.html section 3) verbatim. Runs before the
+         stylesheet applies, so a stored choice paints with no flash.
+         System stays attribute-free: the OS media query in styles.css
+         drives it natively, no JS listener. -->
+    <script>
+      ;(function () {
+        var c = localStorage.getItem("theme") || "system"
+        var light =
+          c === "light" ||
+          (c === "system" && matchMedia("(prefers-color-scheme: light)").matches)
+        if (c === "system") document.documentElement.removeAttribute("data-theme")
+        else document.documentElement.dataset.theme = c
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

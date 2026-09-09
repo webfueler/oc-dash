@@ -2,11 +2,22 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import type { HealthResponse, Range, SessionsPayload, SummaryResponse } from "./api"
 import { fetchHealth, fetchSessions, fetchSummary } from "./api"
 import { ActivityChart } from "./components/ActivityChart"
+import { FilterCombobox } from "./components/FilterCombobox"
+import { FilterSummaryCard } from "./components/FilterSummaryCard"
 import { KpiHeader } from "./components/KpiHeader"
 import { ModelsTable } from "./components/ModelsTable"
 import { RangeTabs } from "./components/RangeTabs"
 import { SessionsTable } from "./components/SessionsTable"
-import { modelRows, todayAccentDate } from "./summary"
+import { applyFilters, directoryOptions, modelComboOptions, projectComboOptions } from "./filters"
+import { filterCardTier, modelRows, projectIDForDirectory, todayAccentDate } from "./summary"
+import {
+  applyTheme,
+  browserStorage,
+  persistTheme,
+  readStoredTheme,
+  THEME_CHOICES,
+  type ThemeChoice,
+} from "./theme"
 import { allParentIds, buildTree } from "./tree"
 
 const POLL_MS = 30_000
@@ -21,8 +32,28 @@ export function App() {
   const [loaded, setLoaded] = useState(false)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [directory, setDirectory] = useState<string>("")
+  // Mission 013 (PC): the model filter — a full "providerID/id · variant" key
+  // or "" for all, with the same client-side post-filter semantics as
+  // `directory` (range switches keep it, like the project filter).
+  const [model, setModel] = useState<string>("")
   // P2: collapsed every load; a parent id lands here only once it is expanded.
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
+
+  // Mission 015 (PB): the stored theme choice. The pre-paint script in
+  // index.html already applied it to <html> before first paint; React just
+  // mirrors it so the control's active segment matches what is on screen.
+  const [theme, setTheme] = useState<ThemeChoice>(() => readStoredTheme(browserStorage()))
+
+  // Mission 014 (PD Q4a): the tier-2 project pass-through. Only a project
+  // filter without a model filter sends project=<id> on /api/summary (the
+  // gating rule); the id comes from the rows themselves (rows carry
+  // projectID). In refresh's dep array so every poll carries it and a
+  // filter change refetches immediately; the derived string is stable
+  // across polls, so ordinary refreshes add no extra fetches.
+  const tier2Project = useMemo(() => {
+    if (filterCardTier(directory, model) !== "tier2") return null
+    return projectIDForDirectory(sessions?.data ?? [], directory)
+  }, [sessions, directory, model])
 
   // P2: switching range collapses the tree again.
   const changeRange = useCallback((r: Range) => {
@@ -30,9 +61,22 @@ export function App() {
     setExpanded(new Set())
   }, [])
 
+  // Mission 015 (PB): the pre-paint script already applied the stored choice;
+  // this effect keeps <html> in step from here on (idempotent on mount, live
+  // on change). No matchMedia listener anywhere: system mode stays
+  // attribute-free, so the OS media query re-themes natively on OS flips.
+  useEffect(() => {
+    applyTheme(document.documentElement, theme)
+  }, [theme])
+
+  const changeTheme = useCallback((t: ThemeChoice) => {
+    setTheme(t)
+    persistTheme(browserStorage(), t)
+  }, [])
+
   const refresh = useCallback(async () => {
     const [r1, r2, r3] = await Promise.allSettled([
-      fetchSummary(range),
+      fetchSummary(range, tier2Project ?? undefined),
       fetchSessions(range),
       fetchHealth(),
     ])
@@ -56,7 +100,7 @@ export function App() {
       })
     setUpdatedAt(new Date())
     setLoaded(true)
-  }, [range])
+  }, [range, tier2Project])
 
   useEffect(() => {
     // All setState calls in refresh() happen after `await`, so nothing here
@@ -79,20 +123,31 @@ export function App() {
     }
   }, [refresh])
 
-  const directories = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const s of sessions?.data ?? []) {
-      const d = s.location?.directory
-      if (d) counts.set(d, (counts.get(d) ?? 0) + 1)
-    }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1])
-  }, [sessions])
+  const directories = useMemo(() => directoryOptions(sessions?.data ?? []), [sessions])
 
-  const tree = useMemo(() => {
-    const data = sessions?.data ?? []
-    const filtered = directory ? data.filter((s) => s.location?.directory === directory) : data
-    return buildTree(filtered)
-  }, [sessions, directory])
+  // Mission 013 (PA/PC): combobox options derived from the same rows the old
+  // select used — live counts over the visible range, All first with the
+  // payload count.
+  const projectFilterOptions = useMemo(
+    () => projectComboOptions(sessions?.data ?? [], sessions?.count ?? 0),
+    [sessions],
+  )
+  const modelFilterOptions = useMemo(
+    () => modelComboOptions(sessions?.data ?? [], sessions?.count ?? 0),
+    [sessions],
+  )
+
+  // Mission 013 (PC) + 014 (PD): directory AND model compose in this memo,
+  // model applied after directory, both before buildTree so the tree
+  // reflects the intersection and a filtered-out parent cannot visibly
+  // promote its children. Hero, Models table, and chart stay global — the
+  // filtered-totals card below is what follows the filters, fed by these
+  // same rows.
+  const filteredRows = useMemo(
+    () => applyFilters(sessions?.data ?? [], directory, model),
+    [sessions, directory, model],
+  )
+  const tree = useMemo(() => buildTree(filteredRows), [filteredRows])
 
   const toggleRow = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -132,6 +187,7 @@ export function App() {
       <header className="topbar">
         <h1>oc-dash</h1>
         <RangeTabs range={range} onChange={changeRange} />
+        <ThemeTabs theme={theme} onChange={changeTheme} />
         <span className="updated dim">
           {updatedAt ? `updated ${updatedAt.toLocaleTimeString()}` : ""}
         </span>
@@ -167,6 +223,20 @@ export function App() {
               session list instead
             </div>
           )}
+          {/* Mission 014 (PD, Q5a): the filtered card renders whenever any
+              filter is active, no dismiss state of its own; it recomputes
+              from the poll's payloads. The hero above stays global. */}
+          {(directory !== "" || model !== "") && (
+            <FilterSummaryCard
+              rows={filteredRows}
+              directory={directory}
+              model={model}
+              summary={summary}
+              sessions={sessions}
+              activeRange={range}
+              projectID={tier2Project}
+            />
+          )}
 
           <section>
             <div className="section-head">
@@ -183,17 +253,33 @@ export function App() {
                   </div>
                 )}
                 {directories.length > 1 && (
-                  <label className="filter">
+                  <div className="filter">
                     Project{" "}
-                    <select value={directory} onChange={(e) => setDirectory(e.target.value)}>
-                      <option value="">All ({sessions?.count ?? 0})</option>
-                      {directories.map(([d, n]) => (
-                        <option key={d} value={d} title={d}>
-                          {d.split("/").pop() || d} ({n})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    <FilterCombobox
+                      ariaLabel="Filter projects"
+                      placeholder="Filter projects…"
+                      options={projectFilterOptions}
+                      value={directory}
+                      onChange={setDirectory}
+                    />
+                  </div>
+                )}
+                {/* Mission 013 (PC): the model combobox. Options always carry the
+                    All entry, so ">1" means at least one real model option; a
+                    set filter keeps the control visible even when the range has
+                    no matching rows, so it can always be cleared. */}
+                {(modelFilterOptions.length > 1 || model !== "") && (
+                  <div className="filter">
+                    Model{" "}
+                    <FilterCombobox
+                      ariaLabel="Filter models"
+                      placeholder="Filter models…"
+                      options={modelFilterOptions}
+                      value={model}
+                      onChange={setModel}
+                      align="right"
+                    />
+                  </div>
                 )}
               </div>
             </div>
@@ -242,6 +328,29 @@ function HealthBanner({ health }: { health: HealthResponse | null }) {
       {svc.healthy
         ? `opencode service healthy · ${svc.url ?? "unknown url"}${svc.version ? ` · v${svc.version}` : ""}`
         : `opencode service unreachable${svc.error ? ` — ${svc.error}` : ""}`}
+    </div>
+  )
+}
+
+// Mission 015 (PB): the 3-segment system | dark | light control, in the
+// topbar next to the range tabs. It reuses oc-dash's own segmented language
+// (.tabs/.tab/.active) verbatim — same border, radius, and accent active
+// state, which stays visible in all three themes. Active segment per the
+// artifact's three control-state mocks.
+function ThemeTabs({ theme, onChange }: { theme: ThemeChoice; onChange: (t: ThemeChoice) => void }) {
+  return (
+    <div className="tabs" role="group" aria-label="Theme">
+      {THEME_CHOICES.map((t) => (
+        <button
+          key={t}
+          type="button"
+          className={t === theme ? "tab active" : "tab"}
+          aria-pressed={t === theme}
+          onClick={() => onChange(t)}
+        >
+          {t}
+        </button>
+      ))}
     </div>
   )
 }

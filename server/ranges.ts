@@ -49,3 +49,16 @@ export function localTimezone(): string {
 export function contextStatsRange(preset: RangePreset, now: Date = new Date()): ResolvedRange | null {
   return preset === "today" ? resolveRange("7d", now) : null
 }
+
+/**
+ * Mission 014 (PD Q4a): additive project pass-through for /api/summary.
+ * Trimmed and non-empty or it is not a project filter at all; hard-capped
+ * so a junk param cannot build an absurd upstream URL — anything unusable
+ * becomes undefined and the server makes no extra upstream call. The
+ * upstream call itself stays best-effort in the handler.
+ */
+export function parseProjectParam(value: string | undefined | null): string | undefined {
+  const v = value?.trim()
+  if (!v || v.length > 200) return undefined
+  return v
+}
