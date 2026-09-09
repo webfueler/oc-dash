@@ -1,6 +1,6 @@
 {
   "name": "@webfueler/oc-dash",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local dashboard for opencode2 session costs, token totals, and subagent spend",
   "license": "MIT",
   "type": "module",
@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
-    "@opencode/client": "^0.0.0-beta-19296",
+    "@opencode/client": "0.0.0-beta-19296",
     "hono": "^4.13.7",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
