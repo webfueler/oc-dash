@@ -8,7 +8,7 @@ import type {
   SummaryResponse,
 } from "./api"
 import { NO_MODEL_KEY } from "./filters"
-import { isoDate } from "./format"
+import { fmtUSD, isoDate } from "./format"
 import { tokenTotal } from "./tree"
 
 /** P1 hero label: the range in plain words. */
@@ -259,6 +259,65 @@ export function filterCardLabel(directory: string, model: string): string {
  */
 export function cardRange(sessions: SessionsPayload | null | undefined, active: Range): Range {
   return sessions ? sessions.range.preset : active
+}
+
+/**
+ * Mission 018: the filtered card's number hierarchy. The session walk
+ * returns sessions ACTIVE in the range, each carrying its full lifetime
+ * cost, while the upstream stats (the hero and the project stats alike)
+ * count cost attributed to messages CREATED in the range. Under Today a
+ * long-lived session dumps its whole multi-day cost into the row sum, so a
+ * row-built card can sit above the global hero. Neither number is wrong;
+ * they answer different questions. Wherever the project stats are
+ * available (tier 2), the headline becomes their cost — the
+ * hero-comparable number — and the row sum is demoted to a clearly labeled
+ * secondary. Every state states its basis.
+ */
+
+/** The row-derived numbers' window semantics, stated plainly. */
+export const ROW_BASIS = "sessions active in range · full session cost"
+
+export interface CardHeadline {
+  cost: number
+  /** True when the headline is the project stats' cost (tier 2 present). */
+  fromStats: boolean
+}
+
+/**
+ * Mission 018: the headline selection. With tier 2 present the project
+ * stats' cost is the headline — the same source and attribution method as
+ * the hero, so the two are apples-to-apples. Without it (model filter,
+ * both filters, or the stats payload unavailable) the row-derived cost
+ * stays the headline and carries the basis line.
+ */
+export function cardHeadline(
+  tier2: { data: { cost: number } } | undefined,
+  rowCost: number,
+): CardHeadline {
+  return tier2 ? { cost: tier2.data.cost, fromStats: true } : { cost: rowCost, fromStats: false }
+}
+
+/** The tier-2 headline's sub line: per-day figure plus the stats basis —
+ * these totals include compaction usage (footnote 1). */
+export function statsBasisSub(perDay: number | null): string[] {
+  const parts: string[] = []
+  if (perDay != null) parts.push(`≈ ${fmtUSD(perDay)}/day`)
+  parts.push("includes compaction usage")
+  return parts
+}
+
+/** The tier-1 headline's sub line: per-day figure plus the row basis. The
+ * compaction exclusion stays in the dashed note below the tiles. */
+export function rowBasisSub(perDay: number | null): string[] {
+  const parts: string[] = []
+  if (perDay != null) parts.push(`≈ ${fmtUSD(perDay)}/day`)
+  parts.push(ROW_BASIS)
+  return parts
+}
+
+/** The demoted tier-2 secondary line: the row-derived sum with its basis. */
+export function rowSecondaryLine(rowCost: number): string {
+  return `${fmtUSD(rowCost)} from the session rows · ${ROW_BASIS} · compaction excluded`
 }
 
 /**

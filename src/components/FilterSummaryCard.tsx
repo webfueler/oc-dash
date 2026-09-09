@@ -1,6 +1,7 @@
 import type { Range, SessionInfo, SessionsPayload, SummaryResponse } from "../api"
 import { fmtInt, fmtTokens, fmtUSD } from "../format"
 import {
+  cardHeadline,
   cardRange,
   costPerDay,
   fallbackTotals,
@@ -9,6 +10,9 @@ import {
   kpisFromFallback,
   projectStatsUsable,
   rangeLabel,
+  rowBasisSub,
+  rowSecondaryLine,
+  statsBasisSub,
 } from "../summary"
 
 /**
@@ -16,17 +20,27 @@ import {
  * hero whenever any filter is active (Q5a) — no state of its own — and
  * recomputes from the payloads the 30-second poll already replaces.
  *
- * Tier 1 (always): cost, tokens, sessions, subagents, client-side from the
- * post-filter session rows via the fallbackTotals pattern.
+ * Mission 018 (number hierarchy): the session walk returns sessions ACTIVE
+ * in the range at full lifetime cost, while the upstream stats count
+ * messages CREATED in the range. Wherever the project stats are available
+ * (tier 2: project filter, no model filter), the HEADLINE is their cost —
+ * the hero-comparable number — and the row-derived sum is demoted to a
+ * clearly labeled secondary line below the tiles. Without tier 2 (model
+ * filter, both filters, or the stats payload unavailable) the row-derived
+ * cost stays the headline and the sub line states its basis. The old
+ * compaction tile is gone: with the rows demoted, the stats-minus-rows
+ * delta conflates the two bases (window semantics, not just compaction) and
+ * no longer tells a true story on its own; the two labeled numbers carry it
+ * instead.
  *
- * Tier 2 (project filter only, no model filter): prompts · steps and
- * active · streak plus the compaction gap, from the /api/summary response's
- * additive projectStats field (one best-effort upstream call with project=).
- * The echoed project id is checked against the filter on screen before the
- * tiles render, so a stale payload can never dress its numbers as the
- * current filter's. If projectStats is missing — upstream failure or a
- * payload from before the field existed — the card degrades to tier 1 with
- * the honest note, never an error surface.
+ * Tier 2's prompts · steps and active · streak tiles come from the
+ * /api/summary response's additive projectStats field (one best-effort
+ * upstream call with project=). The echoed project id is checked against
+ * the filter on screen before anything renders, so a stale payload can
+ * never dress its numbers as the current filter's. If projectStats is
+ * missing — upstream failure or a payload from before the field existed —
+ * the card degrades to the row-built headline with the honest note, never
+ * an error surface.
  */
 export function FilterSummaryCard({
   rows,
@@ -61,7 +75,6 @@ export function FilterSummaryCard({
   const labelRange = cardRange(sessions, activeRange)
   const statsWindow =
     summary && !summary.degraded && summary.range.preset === labelRange ? summary.data.range : undefined
-  const perDay = costPerDay(kpis.cost, labelRange, statsWindow)
 
   const wantsTier2 = filterCardTier(directory, model) === "tier2"
   const okSummary = summary && !summary.degraded ? summary : undefined
@@ -71,15 +84,16 @@ export function FilterSummaryCard({
       ? ps
       : undefined
 
-  // The compaction gap: the stats total minus the row-derived total, the
-  // same delta footnote 1 describes. Only shown when it is positive; a
-  // negative gap means drift ran the other way and there is no honest
-  // compaction number to print.
-  const compaction = tier2 ? tier2.data.cost - kpis.cost : null
-
-  const sub: string[] = []
-  if (perDay != null) sub.push(`≈ ${fmtUSD(perDay)}/day`)
-  sub.push("excludes compaction usage")
+  // Mission 018: the headline is the project stats' cost when tier 2
+  // renders — the hero-comparable number — and the row sum otherwise. The
+  // per-day figure follows whichever payload owns the headline.
+  const headline = cardHeadline(tier2, kpis.cost)
+  const headlinePerDay = costPerDay(
+    headline.cost,
+    labelRange,
+    tier2 ? tier2.data.range : statsWindow,
+  )
+  const sub = headline.fromStats ? statsBasisSub(headlinePerDay) : rowBasisSub(headlinePerDay)
 
   const label = filterCardLabel(directory, model)
   return (
@@ -87,7 +101,16 @@ export function FilterSummaryCard({
       <div className="hero-label">
         Total cost{label ? ` · ${label}` : ""} · {rangeLabel(labelRange)}
       </div>
-      <div className="hero-value">{fmtUSD(kpis.cost)}</div>
+      <div
+        className="hero-value"
+        title={
+          headline.fromStats
+            ? "from the stats endpoint with project= · the hero's own basis"
+            : "from the filtered session rows · sessions active in range at full session cost"
+        }
+      >
+        {fmtUSD(headline.cost)}
+      </div>
       <div className="hero-sub">{sub.join(" · ")}</div>
       <div className="statline">
         <div className="stat" title="from the filtered session rows">
@@ -119,25 +142,17 @@ export function FilterSummaryCard({
                 active · streak <span className="st">stats</span>
               </span>
             </div>
-            {compaction != null && compaction > 0 && (
-              <div
-                className="stat"
-                title="stats total minus row-derived total — compaction usage not attributed to any session (footnote 1)"
-              >
-                <b>{fmtUSD(compaction)}</b>
-                <span>
-                  compaction <span className="st">stats</span>
-                </span>
-              </div>
-            )}
           </>
         )}
       </div>
       {tier2 ? (
-        <p className="fstat">
-          tokens, sessions, subagents from the filtered rows · prompts, steps, activity from the stats
-          endpoint with project= · compaction excluded, like footnote 1 says
-        </p>
+        <>
+          <p className="hero-sub">{rowSecondaryLine(kpis.cost)}</p>
+          <p className="fstat">
+            headline cost from the stats endpoint with project= · tokens, sessions, subagents from the
+            filtered session rows · prompts, steps, activity from the stats endpoint
+          </p>
+        </>
       ) : (
         <>
           <p className="note">

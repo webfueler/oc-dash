@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type {
+  ProjectStats,
   Range,
   SessionInfo,
   SessionStatsInfo,
@@ -11,6 +12,8 @@ import type {
 import { NO_MODEL_KEY, applyFilters } from "./filters"
 import { sess } from "./tree.test"
 import {
+  ROW_BASIS,
+  cardHeadline,
   cardRange,
   costPerDay,
   fallbackTotals,
@@ -23,6 +26,9 @@ import {
   projectIDForDirectory,
   projectStatsUsable,
   rangeLabel,
+  rowBasisSub,
+  rowSecondaryLine,
+  statsBasisSub,
   todayAccentDate,
 } from "./summary"
 
@@ -529,5 +535,65 @@ describe("mission 014: tier-1 totals come from the filtered rows", () => {
     expect(k.tokens).toBe(0)
     expect(k.sessions).toBe(0)
     expect(k.subagents).toBe(0)
+  })
+})
+
+// Mission 018: the card's number hierarchy. The walk returns sessions ACTIVE
+// in the range, each at full lifetime cost; the upstream stats count cost by
+// messages CREATED in the range. With tier 2 present the headline is the
+// project stats' cost (the hero-comparable number) and the row sum is
+// demoted to a labeled secondary; without it the row cost stays the headline.
+describe("mission 018: headline selection", () => {
+  const tier2 = (cost: number): ProjectStats => ({
+    project: "a853e4056eb87ed6b795a87bb1fac00493c9e4f1",
+    data: { ...statsOk("7d").data, cost },
+  })
+
+  it("makes the project stats' cost the headline when tier 2 renders", () => {
+    const h = cardHeadline(tier2(4.1897), 5.4305)
+    expect(h.cost).toBeCloseTo(4.1897, 6)
+    expect(h.fromStats).toBe(true)
+  })
+
+  it("keeps the row-derived cost as the headline without tier 2", () => {
+    // Model filter, both filters, degraded stats, stale echo — the component
+    // resolves all of those to undefined before this helper sees them.
+    const h = cardHeadline(undefined, 5.4305)
+    expect(h.cost).toBeCloseTo(5.4305, 6)
+    expect(h.fromStats).toBe(false)
+  })
+
+  it("keeps the two numbers apart even when the row sum exceeds the stats", () => {
+    // The live Today mechanism: long-lived sessions inflate the row sum past
+    // the hero-comparable stats cost. The headline must still be the stats
+    // figure, never the larger row sum.
+    const h = cardHeadline(tier2(3.56), 4.8)
+    expect(h.cost).toBeCloseTo(3.56, 6)
+    expect(h.fromStats).toBe(true)
+  })
+})
+
+describe("mission 018: basis lines", () => {
+  it("states the stats basis on the tier-2 headline", () => {
+    expect(statsBasisSub(null)).toEqual(["includes compaction usage"])
+    expect(statsBasisSub(1.5)).toEqual(["≈ $1.50/day", "includes compaction usage"])
+  })
+
+  it("states the row basis on the tier-1 headline", () => {
+    expect(rowBasisSub(null)).toEqual([ROW_BASIS])
+    expect(rowBasisSub(1.5)).toEqual(["≈ $1.50/day", ROW_BASIS])
+    expect(ROW_BASIS).toBe("sessions active in range · full session cost")
+  })
+
+  it("demotes the row sum to a secondary line that carries its basis", () => {
+    expect(rowSecondaryLine(10.5061)).toBe(
+      "$10.51 from the session rows · sessions active in range · full session cost · compaction excluded",
+    )
+  })
+
+  it("keeps sub-dollar precision in the demoted line, like the hero formatter", () => {
+    expect(rowSecondaryLine(0.5857)).toBe(
+      "$0.5857 from the session rows · sessions active in range · full session cost · compaction excluded",
+    )
   })
 })
