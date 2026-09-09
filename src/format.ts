@@ -37,3 +37,23 @@ export function relTime(ms: number, now: number = Date.now()): string {
   if (hours < 24) return `${hours}h ago`
   return `${Math.floor(hours / 24)}d ago`
 }
+
+export type SessionOutcome = "succeeded" | "failed" | "interrupted"
+
+/**
+ * Outcome column as an exception report: successes collapse to a dim check
+ * glyph, failures and interruptions keep their loud badges, and rows with
+ * no outcome render a dim dash.
+ */
+export function outcomeView(outcome?: SessionOutcome): "check" | "badge" | "dim" {
+  if (outcome === "succeeded") return "check"
+  if (outcome === "failed" || outcome === "interrupted") return "badge"
+  return "dim"
+}
+
+/** Local calendar date as YYYY-MM-DD, matching the stats activity dates. */
+export function isoDate(ms: number): string {
+  const d = new Date(ms)
+  const p = (n: number): string => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}

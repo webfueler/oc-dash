@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { SessionInfo, TokenUsage } from "./api"
-import { buildTree, tokenTotal, type SessionNode } from "./tree"
+import { allParentIds, buildTree, tokenTotal, type SessionNode } from "./tree"
 
 export function sess(partial: Partial<SessionInfo> & { id: string }): SessionInfo {
   return {
@@ -84,6 +84,21 @@ describe("buildTree", () => {
   it("treats a self-referencing session as a root", () => {
     const s = sess({ id: "s", parentID: "s" })
     expect(buildTree([s])).toHaveLength(1)
+  })
+
+  it("lists every togglable id for Expand all, at any depth", () => {
+    const a = sess({ id: "a" })
+    const b = sess({ id: "b", parentID: "a" })
+    const c = sess({ id: "c", parentID: "b" })
+    const leaf = sess({ id: "leaf" })
+    const tree = buildTree([c, b, leaf, a])
+    // b has a child (c) even though it is itself a child row.
+    expect(allParentIds(tree)).toEqual(["a", "b"])
+  })
+
+  it("returns nothing when no session has children", () => {
+    expect(allParentIds(buildTree([sess({ id: "x" }), sess({ id: "y" })]))).toEqual([])
+    expect(allParentIds(buildTree([]))).toEqual([])
   })
 })
 

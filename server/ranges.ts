@@ -41,3 +41,11 @@ export function resolveRange(preset: RangePreset, now: Date = new Date()): Resol
 export function localTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
 }
+
+/**
+ * Trailing-7-days window that gives the Today chart its context days; null
+ * for every other preset (they already cover their own span).
+ */
+export function contextStatsRange(preset: RangePreset, now: Date = new Date()): ResolvedRange | null {
+  return preset === "today" ? resolveRange("7d", now) : null
+}

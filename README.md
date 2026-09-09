@@ -8,17 +8,29 @@ plain CSS, inline-SVG activity chart. No chart library, no CSS framework.
 
 ## What it shows
 
-- **KPI header** — total cost (USD), total tokens, prompts, steps, sessions,
-  subagents, active days, and streak for the selected range. Data comes from
-  `GET /api/session/stats` on the opencode service.
-- **Sessions table** — every session in the range with title, agent, model,
-  own cost, **incl. subagents** (recursive: parent cost plus the cost of all
-  descendants at any depth), tokens, last activity, and outcome. Child
-  sessions nest collapsibly under their parent. A project filter is built
-  from the session directories.
+- **Cost hero** — one hero card with the range's total cost (USD, money-green),
+  a `≈ $X/day` figure where the range spans full days (omitted for today), and
+  a compact stat strip below it: tokens, prompts · steps, sessions ·
+  subagents, active days · streak. When the stats endpoint is unavailable, the
+  hero carries a fallback badge and the strip shows totals computed from the
+  session list instead.
+- **Sessions table** — every session in the range with title, agent, model
+  chip (full `provider/model · variant` string on hover), own cost, **incl.
+  subagents** (recursive: parent cost plus the cost of all descendants at any
+  depth), tokens, last activity, and outcome. Child sessions nest under their
+  parent, **collapsed by default**: clicking a parent row (or focusing it and
+  pressing Enter/Space) expands its subagents, and Expand all / Collapse all
+  buttons sit in the section head. Tree state resets when the range changes.
+  Rows whose outcome is `succeeded` render a dim check; `failed` and
+  `interrupted` keep loud badges. A project filter is built from the session
+  directories.
 - **Models table** — steps, tokens, and cost per model, with an `unpriced`
   flag on models that burn tokens but report zero cost.
-- **Activity chart** — steps per day, drawn as inline SVG.
+- **Activity chart** — steps per day, drawn as inline SVG: bars are
+  width-capped and slot-centered, dotted gridlines mark 25/50/75% of the peak,
+  zero-step days stay visible as stubs, and the Today range shows the trailing
+  7 days with the in-range day accented (`/api/summary` gains an additive,
+  Today-only `contextActivity` field for this).
 
 Refreshes every 30 seconds while the tab is visible; refreshes immediately
 when the tab becomes visible again.

@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server"
 import { serveStatic } from "@hono/node-server/serve-static"
 import { Hono } from "hono"
 import { errorMessage, getOpencode, ocGetJson, type OpencodeContext } from "./opencode.js"
-import { localTimezone, parseRangePreset, resolveRange } from "./ranges.js"
+import { contextStatsRange, localTimezone, parseRangePreset, resolveRange } from "./ranges.js"
 import { walkSessions, type RawPage } from "./walk.js"
 
 const PAGE_LIMIT = 100
@@ -92,7 +92,28 @@ app.get("/api/summary", async (c) => {
     ) {
       throw new Error("unexpected /api/session/stats payload shape")
     }
-    return c.json({ degraded: false, range, timezone: tz, data })
+    // Additive, Today-only: trailing 7 days of activity so the chart can
+    // render the in-range day next to muted context days. Best effort — the
+    // response is served without it when the extra call fails.
+    let contextActivity: unknown
+    const ctxRange = contextStatsRange(preset)
+    if (ctxRange) {
+      try {
+        const ctxRaw = await statsCall(oc, ctxRange, tz)
+        const ctxData = (ctxRaw as { data?: unknown })?.data ?? ctxRaw
+        const act = (ctxData as { activity?: unknown } | null)?.activity
+        if (Array.isArray(act)) contextActivity = act
+      } catch {
+        // context is optional
+      }
+    }
+    return c.json({
+      degraded: false,
+      range,
+      timezone: tz,
+      data,
+      ...(contextActivity !== undefined ? { contextActivity } : {}),
+    })
   } catch (err) {
     // Degraded marker instead of an error page when stats are unavailable.
     return c.json({ degraded: true, range, timezone: tz, reason: errorMessage(err) })

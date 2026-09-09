@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest"
 import type { SessionInfo, SessionStatsInfo, TokenUsage } from "./api"
 import { sess } from "./tree.test"
 import {
+  costPerDay,
   fallbackTotals,
   kpisFromFallback,
   kpisFromStats,
   modelRows,
+  rangeLabel,
 } from "./summary"
 
 const zeroTokens: TokenUsage = {
@@ -182,5 +184,38 @@ describe("kpi view models", () => {
     expect(k.subagents).toBe(1)
     expect(k.prompts).toBeNull()
     expect(k.steps).toBeNull()
+  })
+})
+
+describe("P1 hero mapping", () => {
+  it("labels every range", () => {
+    expect(rangeLabel("today")).toBe("today")
+    expect(rangeLabel("7d")).toBe("last 7 days")
+    expect(rangeLabel("30d")).toBe("last 30 days")
+    expect(rangeLabel("all")).toBe("all time")
+  })
+
+  it("spreads cost over 7 and 30 days", () => {
+    expect(costPerDay(7, "7d")).toBeCloseTo(1, 6)
+    expect(costPerDay(3, "30d")).toBeCloseTo(0.1, 6)
+  })
+
+  it("omits the per-day figure for today", () => {
+    expect(costPerDay(7, "today")).toBeNull()
+  })
+
+  it("derives the day count from the stats window for all", () => {
+    const window = { from: 0, to: 5 * 86_400_000 }
+    expect(costPerDay(10, "all", window)).toBeCloseTo(2, 6)
+  })
+
+  it("omits the per-day figure for all without a usable stats window", () => {
+    expect(costPerDay(10, "all")).toBeNull()
+    expect(costPerDay(10, "all", { from: 5, to: 5 })).toBeNull()
+    expect(costPerDay(10, "all", { from: 10, to: 5 })).toBeNull()
+  })
+
+  it("treats non-finite cost as unpriced rather than a number", () => {
+    expect(costPerDay(Number.NaN, "7d")).toBeNull()
   })
 })

@@ -64,6 +64,11 @@ export interface SummaryOk {
   range: ResolvedRange
   timezone: string
   data: SessionStatsInfo
+  /**
+   * Additive, Today-only: the trailing 7 days of activity (same shape as
+   * `data.activity`) so the chart can show the in-range day in context.
+   */
+  contextActivity?: ActivityDay[]
 }
 
 export interface SummaryDegraded {

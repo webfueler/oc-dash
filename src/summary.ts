@@ -1,5 +1,36 @@
-import type { ModelUsage, SessionInfo, SessionStatsInfo } from "./api"
+import type { ModelUsage, Range, SessionInfo, SessionStatsInfo } from "./api"
 import { tokenTotal } from "./tree"
+
+/** P1 hero label: the range in plain words. */
+const RANGE_LABELS: Record<Range, string> = {
+  today: "today",
+  "7d": "last 7 days",
+  "30d": "last 30 days",
+  all: "all time",
+}
+
+export function rangeLabel(range: Range): string {
+  return RANGE_LABELS[range]
+}
+
+/**
+ * P1 hero "≈ $X/day": cost spread over the range length. Omitted for today
+ * (the day is still in progress); for "all" the day count comes from the
+ * stats window itself.
+ */
+export function costPerDay(
+  cost: number,
+  range: Range,
+  statsWindow?: { from: number; to: number },
+): number | null {
+  if (!Number.isFinite(cost)) return null
+  if (range === "today") return null
+  if (range === "7d") return cost / 7
+  if (range === "30d") return cost / 30
+  if (!statsWindow || statsWindow.to <= statsWindow.from) return null
+  const days = (statsWindow.to - statsWindow.from) / 86_400_000
+  return days >= 1 ? cost / days : null
+}
 
 export interface ModelRow {
   providerID: string

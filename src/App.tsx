@@ -6,8 +6,9 @@ import { KpiHeader } from "./components/KpiHeader"
 import { ModelsTable } from "./components/ModelsTable"
 import { RangeTabs } from "./components/RangeTabs"
 import { SessionsTable } from "./components/SessionsTable"
+import { isoDate } from "./format"
 import { modelRows } from "./summary"
-import { buildTree } from "./tree"
+import { allParentIds, buildTree } from "./tree"
 
 const POLL_MS = 30_000
 
@@ -21,6 +22,14 @@ export function App() {
   const [loaded, setLoaded] = useState(false)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [directory, setDirectory] = useState<string>("")
+  // P2: collapsed every load; a parent id lands here only once it is expanded.
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
+
+  // P2: switching range collapses the tree again.
+  const changeRange = useCallback((r: Range) => {
+    setRange(r)
+    setExpanded(new Set())
+  }, [])
 
   const refresh = useCallback(async () => {
     const [r1, r2, r3] = await Promise.allSettled([
@@ -86,17 +95,41 @@ export function App() {
     return buildTree(filtered)
   }, [sessions, directory])
 
+  const toggleRow = useCallback((id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const expandAll = useCallback(() => {
+    setExpanded(new Set(allParentIds(tree)))
+  }, [tree])
+
+  const collapseAll = useCallback(() => {
+    setExpanded(new Set())
+  }, [])
+
+  const treeHasParents = useMemo(() => allParentIds(tree).length > 0, [tree])
+
   const models = useMemo(
     () => (summary && !summary.degraded ? modelRows(summary.data) : []),
     [summary],
   )
-  const activity = summary && !summary.degraded ? summary.data.activity : undefined
+  const okSummary = summary && !summary.degraded ? summary : undefined
+  const activity = okSummary?.data.activity
+  const contextActivity = okSummary?.contextActivity
+  // Today's chart accents the in-range day (local midnight from the stats window).
+  const accentDate =
+    range === "today" && okSummary?.data.range.from != null ? isoDate(okSummary.data.range.from) : null
 
   return (
     <div className="app">
       <header className="topbar">
         <h1>oc-dash</h1>
-        <RangeTabs range={range} onChange={setRange} />
+        <RangeTabs range={range} onChange={changeRange} />
         <span className="updated dim">
           {updatedAt ? `updated ${updatedAt.toLocaleTimeString()}` : ""}
         </span>
@@ -125,7 +158,7 @@ export function App() {
 
       {loaded && (
         <>
-          <KpiHeader summary={summary} sessions={sessions} />
+          <KpiHeader summary={summary} sessions={sessions} range={range} />
           {summary?.degraded && (
             <div className="badge warn degraded-note">
               stats endpoint unavailable ({summary.reason}) — showing totals derived from the
@@ -136,26 +169,38 @@ export function App() {
           <section>
             <div className="section-head">
               <h2>Sessions</h2>
-              {directories.length > 1 && (
-                <label className="filter">
-                  Project{" "}
-                  <select value={directory} onChange={(e) => setDirectory(e.target.value)}>
-                    <option value="">All ({sessions?.count ?? 0})</option>
-                    {directories.map(([d, n]) => (
-                      <option key={d} value={d} title={d}>
-                        {d.split("/").pop() || d} ({n})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <div className="section-tools">
+                {treeHasParents && (
+                  <div className="tree-controls" role="group" aria-label="Tree expansion">
+                    <button type="button" onClick={expandAll}>
+                      Expand all
+                    </button>
+                    <button type="button" onClick={collapseAll}>
+                      Collapse all
+                    </button>
+                  </div>
+                )}
+                {directories.length > 1 && (
+                  <label className="filter">
+                    Project{" "}
+                    <select value={directory} onChange={(e) => setDirectory(e.target.value)}>
+                      <option value="">All ({sessions?.count ?? 0})</option>
+                      {directories.map(([d, n]) => (
+                        <option key={d} value={d} title={d}>
+                          {d.split("/").pop() || d} ({n})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
             </div>
             {sessions?.truncated && (
               <p className="badge warn">
                 session list truncated at 50 pages — older sessions may be missing
               </p>
             )}
-            <SessionsTable nodes={tree} />
+            <SessionsTable nodes={tree} expanded={expanded} onToggle={toggleRow} />
           </section>
 
           <section>
@@ -165,7 +210,7 @@ export function App() {
 
           <section>
             <h2>Activity</h2>
-            <ActivityChart activity={activity} />
+            <ActivityChart activity={activity} contextActivity={contextActivity} accentDate={accentDate} />
           </section>
 
           <footer className="footnotes">

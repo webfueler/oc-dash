@@ -1,23 +1,27 @@
-import { useState } from "react"
 import type { SessionInfo } from "../api"
-import { fmtInt, fmtTokens, fmtUSD, relTime } from "../format"
+import { fmtInt, fmtTokens, fmtUSD, outcomeView, relTime } from "../format"
 import type { SessionNode } from "../tree"
 
-export function SessionsTable({ nodes }: { nodes: SessionNode[] }) {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
-  const toggle = (id: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+/**
+ * P2/P3/P4: the tree ships collapsed (an id is visible-expanded only when it
+ * is in `expanded`); the parent row itself is the disclosure — click or
+ * Enter/Space — with the "N subagents · M tokens · last activity" sub-line
+ * as the only affordance. No caret, no tree column.
+ */
+export function SessionsTable({
+  nodes,
+  expanded,
+  onToggle,
+}: {
+  nodes: SessionNode[]
+  expanded: ReadonlySet<string>
+  onToggle: (id: string) => void
+}) {
   if (nodes.length === 0) return <p className="empty">No sessions in this range.</p>
   return (
     <table className="sessions">
       <thead>
         <tr>
-          <th className="tree-col" aria-label="Nesting" />
           <th>Session</th>
           <th>Agent</th>
           <th>Model</th>
@@ -28,9 +32,7 @@ export function SessionsTable({ nodes }: { nodes: SessionNode[] }) {
           <th>Outcome</th>
         </tr>
       </thead>
-      <tbody>
-        {nodes.flatMap((n) => rows(n, 0, collapsed, toggle))}
-      </tbody>
+      <tbody>{nodes.flatMap((n) => rows(n, 0, expanded, onToggle))}</tbody>
     </table>
   )
 }
@@ -38,12 +40,12 @@ export function SessionsTable({ nodes }: { nodes: SessionNode[] }) {
 function rows(
   node: SessionNode,
   depth: number,
-  collapsed: ReadonlySet<string>,
-  toggle: (id: string) => void,
+  expanded: ReadonlySet<string>,
+  onToggle: (id: string) => void,
 ): React.ReactElement[] {
-  const out = [row(node, depth, collapsed, toggle)]
-  if (!collapsed.has(node.session.id)) {
-    for (const child of node.children) out.push(...rows(child, depth + 1, collapsed, toggle))
+  const out = [row(node, depth, expanded, onToggle)]
+  if (expanded.has(node.session.id)) {
+    for (const child of node.children) out.push(...rows(child, depth + 1, expanded, onToggle))
   }
   return out
 }
@@ -51,45 +53,67 @@ function rows(
 function row(
   node: SessionNode,
   depth: number,
-  collapsed: ReadonlySet<string>,
-  toggle: (id: string) => void,
+  expanded: ReadonlySet<string>,
+  onToggle: (id: string) => void,
 ): React.ReactElement {
   const s: SessionInfo = node.session
   const hasChildren = node.children.length > 0
-  const isOpen = hasChildren && !collapsed.has(s.id)
+  const isOpen = hasChildren && expanded.has(s.id)
+  const indent = 34 + Math.max(0, depth - 1) * 18
   const model = s.model
-    ? `${s.model.providerID}/${s.model.id}${s.model.variant ? ` · ${s.model.variant}` : ""}`
-    : "—"
+  const fullModel = model
+    ? `${model.providerID}/${model.id}${model.variant ? ` · ${model.variant}` : ""}`
+    : undefined
+  const shortModel = model
+    ? `${model.id}${model.variant ? ` · ${model.variant}` : ""}`
+    : undefined
   const tokenTip = s.tokens
     ? `input ${fmtInt(s.tokens.input)} · output ${fmtInt(s.tokens.output)} · reasoning ${fmtInt(s.tokens.reasoning)} · cache read ${fmtInt(s.tokens.cache?.read)} · cache write ${fmtInt(s.tokens.cache?.write)}`
     : undefined
+  const desc = hasChildren
+    ? `${node.descendants} ${node.descendants === 1 ? "subagent" : "subagents"} · ${fmtTokens(node.inclTokens)} tokens · ${relTime(s.time?.updated)}`
+    : depth === 0
+      ? `no subagents · ${relTime(s.time?.updated)}`
+      : undefined
+  const outcome = outcomeView(s.outcome)
+  const titleStyle = depth > 0 ? { paddingLeft: `${indent}px`, ["--indent" as string]: `${indent}px` } : undefined
   return (
-    <tr className={s.parentID ? "child-row" : "root-row"}>
-      <td className="tree-col" style={{ paddingLeft: `${8 + depth * 18}px` }}>
-        {hasChildren ? (
-          <button
-            type="button"
-            className="chevron"
-            aria-expanded={isOpen}
-            aria-label={isOpen ? "Collapse subagents" : "Expand subagents"}
-            onClick={() => toggle(s.id)}
-          >
-            {isOpen ? "▾" : "▸"}
-          </button>
-        ) : null}
-      </td>
-      <td className="title" title={s.title ?? undefined}>
+    <tr
+      className={`${s.parentID ? "child-row" : "root-row"}${hasChildren ? " togglable" : ""}`}
+      aria-expanded={hasChildren ? isOpen : undefined}
+      tabIndex={hasChildren ? 0 : undefined}
+      onClick={hasChildren ? () => onToggle(s.id) : undefined}
+      onKeyDown={
+        hasChildren
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                onToggle(s.id)
+              }
+            }
+          : undefined
+      }
+    >
+      <td className="title" title={s.title ?? undefined} style={titleStyle}>
         {s.title ?? "(untitled)"}
+        {desc && <div className="desc">{desc}</div>}
       </td>
       <td>{s.agent ?? "—"}</td>
-      <td className="model" title={model}>
-        {model}
+      <td className="model">
+        {model ? (
+          <span className="mchip" title={fullModel}>
+            {shortModel}
+          </span>
+        ) : (
+          <span className="dim">—</span>
+        )}
       </td>
       <td className="num">{fmtUSD(node.ownCost)}</td>
       <td className="num" title="own cost plus the cost of all descendants">
         {hasChildren ? (
           <>
-            {fmtUSD(node.inclCost)} <span className="dim">({node.descendants})</span>
+            <span className="money">{fmtUSD(node.inclCost)}</span>{" "}
+            <span className="dim">({node.descendants})</span>
           </>
         ) : (
           <span className="dim">—</span>
@@ -100,7 +124,13 @@ function row(
       </td>
       <td>{relTime(s.time?.updated)}</td>
       <td>
-        {s.outcome ? <span className={`badge ${s.outcome}`}>{s.outcome}</span> : <span className="dim">—</span>}
+        {outcome === "check" && (
+          <span className="check" title="succeeded">
+            ✓
+          </span>
+        )}
+        {outcome === "badge" && s.outcome && <span className={`badge ${s.outcome}`}>{s.outcome}</span>}
+        {outcome === "dim" && <span className="dim">—</span>}
       </td>
     </tr>
   )

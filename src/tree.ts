@@ -12,6 +12,21 @@ export interface SessionNode {
   descendants: number
 }
 
+/** Every node id that has children, at any depth — the "Expand all" set. */
+export function allParentIds(nodes: Iterable<SessionNode>): string[] {
+  const ids: string[] = []
+  const walk = (list: SessionNode[]): void => {
+    for (const n of list) {
+      if (n.children.length > 0) {
+        ids.push(n.session.id)
+        walk(n.children)
+      }
+    }
+  }
+  walk([...nodes])
+  return ids
+}
+
 /** Sum of every token bucket, cache read and write included. */
 export function tokenTotal(t?: TokenUsage): number {
   if (!t) return 0
