@@ -4,9 +4,10 @@ import {
   NO_MODEL_KEY,
   applyFilters,
   directoryOptions,
+  modelBaseKey,
   modelComboOptions,
-  modelFullLabel,
   modelOptions,
+  modelShortLabel,
   projectComboOptions,
 } from "./filters"
 import { buildTree } from "./tree"
@@ -67,34 +68,45 @@ describe("directoryOptions", () => {
   })
 })
 
-describe("modelFullLabel", () => {
-  it("formats the full triple and omits a missing variant", () => {
-    expect(modelFullLabel({ providerID: "opencode-go", id: "glm-5.3-flash", variant: "max" })).toBe(
-      "opencode-go/glm-5.3-flash · max",
+describe("modelBaseKey / modelShortLabel", () => {
+  it("builds the base key with the variant dropped", () => {
+    expect(modelBaseKey({ providerID: "opencode-go", id: "glm-5.3-flash", variant: "max" })).toBe(
+      "opencode-go/glm-5.3-flash",
     )
-    expect(modelFullLabel({ providerID: "github-copilot", id: "gpt-5.6-luna" })).toBe(
+    expect(modelBaseKey({ providerID: "github-copilot", id: "gpt-5.6-luna" })).toBe(
       "github-copilot/gpt-5.6-luna",
     )
+  })
+
+  it("applies the short-form convention: provider prefix dropped, id kept", () => {
+    expect(modelShortLabel("opencode-go/glm-5.3-flash")).toBe("glm-5.3-flash")
+    expect(modelShortLabel("p/m")).toBe("m")
   })
 })
 
 describe("modelOptions", () => {
-  it("groups rows by the full provider/id · variant triple", () => {
+  it("groups rows by the base provider/id, summing the variants' counts", () => {
     const opts = modelOptions(rows())
     expect(opts.map((o) => [o.key, o.count])).toEqual([
-      ["opencode-go/glm-5.3-flash · max", 2],
-      ["opencode-go/glm-5.3-flash · default", 1],
-      ["github-copilot/gpt-5.6-luna · default", 1],
+      ["opencode-go/glm-5.3-flash", 3],
+      ["github-copilot/gpt-5.6-luna", 1],
       [NO_MODEL_KEY, 1],
     ])
   })
 
-  it("keeps variants separate buckets (FULL triple granularity, Q3a)", () => {
+  it("collapses the variants of one id into a single base bucket (mission 019)", () => {
     const opts = modelOptions(rows())
+    const glm = opts.filter((o) => o.key === "opencode-go/glm-5.3-flash")
+    expect(glm).toHaveLength(1)
+    expect(glm[0].count).toBe(3)
     const keys = opts.map((o) => o.key)
-    expect(keys).toContain("opencode-go/glm-5.3-flash · max")
-    expect(keys).toContain("opencode-go/glm-5.3-flash · default")
-    expect(keys).not.toContain("opencode-go/glm-5.3-flash")
+    expect(keys).not.toContain("opencode-go/glm-5.3-flash · max")
+    expect(keys).not.toContain("opencode-go/glm-5.3-flash · default")
+  })
+
+  it("labels real models with the short id form, provider dropped", () => {
+    const glm = modelOptions(rows()).find((o) => o.key === "opencode-go/glm-5.3-flash")
+    expect(glm?.label).toBe("glm-5.3-flash")
   })
 
   it("buckets the no-model rows into one explicit dashed entry", () => {
@@ -115,7 +127,7 @@ describe("modelOptions", () => {
     ]
     expect(modelOptions(many).map((o) => o.key)).toEqual([
       NO_MODEL_KEY,
-      "p/m · max",
+      "p/m",
     ])
   })
 
@@ -153,10 +165,23 @@ describe("modelComboOptions", () => {
     expect(real.filter((o) => o.dashed).map((o) => o.key)).toEqual([NO_MODEL_KEY])
   })
 
-  it("matches the query against the visible label", () => {
+  it("matches the query against the hidden full base, provider included", () => {
     const opts = modelComboOptions(rows(), 5)
     const hits = opts.filter((o) => o.searchText.toLowerCase().includes("copilot"))
-    expect(hits.map((o) => o.key)).toEqual(["github-copilot/gpt-5.6-luna · default"])
+    expect(hits.map((o) => o.key)).toEqual(["github-copilot/gpt-5.6-luna"])
+  })
+
+  it("shows the short id label with the full base as detail (mission 019)", () => {
+    const opts = modelComboOptions(rows(), 5)
+    const glm = opts.find((o) => o.key === "opencode-go/glm-5.3-flash")
+    expect(glm?.label).toBe("glm-5.3-flash")
+    expect(glm?.detail).toBe("opencode-go/glm-5.3-flash")
+    expect(glm?.searchText).toBe("opencode-go/glm-5.3-flash")
+    // The no-model bucket keeps its dashed label and carries no detail.
+    const nm = opts.find((o) => o.key === NO_MODEL_KEY)
+    expect(nm?.label).toBe("no model")
+    expect(nm?.detail).toBeUndefined()
+    expect(nm?.searchText).toBe("no model")
   })
 })
 
@@ -171,13 +196,18 @@ describe("applyFilters", () => {
     expect(applyFilters(rows(), "/nope", "")).toEqual([])
   })
 
-  it("filters by the full model triple, variant-sensitive", () => {
-    expect(applyFilters(rows(), "", "opencode-go/glm-5.3-flash · max").map((s) => s.id)).toEqual([
+  it("matches both variants of one model, variant-agnostic (mission 019)", () => {
+    // a1 is the default variant, a2/a3 the max: one base filter takes all.
+    expect(applyFilters(rows(), "", "opencode-go/glm-5.3-flash").map((s) => s.id)).toEqual([
+      "a1",
       "a2",
       "a3",
     ])
-    // Base id alone matches nothing: granularity is the full triple.
-    expect(applyFilters(rows(), "", "opencode-go/glm-5.3-flash")).toEqual([])
+  })
+
+  it("matches nothing on a full triple key: the variant left the key", () => {
+    expect(applyFilters(rows(), "", "opencode-go/glm-5.3-flash · max")).toEqual([])
+    expect(applyFilters(rows(), "", "opencode-go/glm-5.3-flash · default")).toEqual([])
   })
 
   it("selects only the rows without a model for the no-model entry", () => {
@@ -185,13 +215,13 @@ describe("applyFilters", () => {
   })
 
   it("composes directory AND model into the intersection", () => {
-    // a2/a3 carry the max triple in oc-setup; the max rows in PERSONAL do not
-    // exist, so the intersection is the oc-setup pair only.
+    // a1/a2/a3 carry the glm base across both variants in oc-setup; no glm
+    // rows exist in PERSONAL, so the intersection is the oc-setup trio only.
     expect(
-      applyFilters(rows(), OC_SETUP, "opencode-go/glm-5.3-flash · max").map((s) => s.id),
-    ).toEqual(["a2", "a3"])
+      applyFilters(rows(), OC_SETUP, "opencode-go/glm-5.3-flash").map((s) => s.id),
+    ).toEqual(["a1", "a2", "a3"])
     expect(
-      applyFilters(rows(), PERSONAL, "opencode-go/glm-5.3-flash · max").map((s) => s.id),
+      applyFilters(rows(), PERSONAL, "opencode-go/glm-5.3-flash").map((s) => s.id),
     ).toEqual([])
     expect(applyFilters(rows(), OC_SETUP, NO_MODEL_KEY)).toEqual([])
   })
@@ -199,18 +229,18 @@ describe("applyFilters", () => {
   it("feeds buildTree in one pass: the parent survives with its child", () => {
     // Both filters run before buildTree, so the a2 parent and its a3 child
     // stay nested (no orphan promotion mid-pipeline).
-    const filtered = applyFilters(rows(), OC_SETUP, "opencode-go/glm-5.3-flash · max")
+    const filtered = applyFilters(rows(), OC_SETUP, "opencode-go/glm-5.3-flash")
     const nodes = buildTree(filtered)
-    expect(nodes).toHaveLength(1)
-    expect(nodes[0].session.id).toBe("a2")
-    expect(nodes[0].children.map((n) => n.session.id)).toEqual(["a3"])
+    expect(nodes.map((n) => n.session.id)).toEqual(["a1", "a2"])
+    expect(nodes[1].session.id).toBe("a2")
+    expect(nodes[1].children.map((n) => n.session.id)).toEqual(["a3"])
   })
 
   it("keeps buildTree's own promotion semantics for a filtered-out parent", () => {
     // A parent that fails the model filter while its child passes still lets
     // buildTree promote the child — composition changes what reaches
     // buildTree, not how buildTree behaves.
-    const nodes = buildTree(applyFilters(rows(), "", "github-copilot/gpt-5.6-luna · default"))
+    const nodes = buildTree(applyFilters(rows(), "", "github-copilot/gpt-5.6-luna"))
     expect(nodes.map((n) => n.session.id)).toEqual(["b1"])
     expect(nodes[0].children).toHaveLength(0)
   })

@@ -30,21 +30,34 @@ export function directoryOptions(rows: SessionInfo[]): DirectoryOption[] {
     .sort((a, b) => b.count - a.count)
 }
 
-/** "providerID/id · variant" — the same string the table chips carry. */
-export function modelFullLabel(m: ModelRef): string {
-  return `${m.providerID}/${m.id}${m.variant ? ` · ${m.variant}` : ""}`
+/**
+ * The base model identity: "providerID/id" with the reasoning level (the
+ * variant) dropped. Mission 019: the model FILTER ignores the variant, so
+ * both the option keys and applyFilters' match work on this base.
+ */
+export function modelBaseKey(m: ModelRef): string {
+  return `${m.providerID}/${m.id}`
+}
+
+/**
+ * The existing short-form convention (the table chips and the card label):
+ * drop the provider prefix, keep the id — "p/m · v" reads as "m · v", so the
+ * base key "p/m" reads as "m".
+ */
+export function modelShortLabel(key: string): string {
+  return key.includes("/") ? key.slice(key.indexOf("/") + 1) : key
 }
 
 /**
  * State value of the model filter. "" means no model filter; every real
- * option key is its full triple ("providerID/id · variant"), which always
- * contains a "/", so this sentinel cannot collide.
+ * option key is its base model ("providerID/id", variant-agnostic), which
+ * always contains a "/", so this sentinel cannot collide.
  */
 export const NO_MODEL_KEY = "no-model"
 
 export interface ModelOption {
   key: string
-  /** Visible label; for real models this is the full triple itself. */
+  /** Visible label; for real models the short id form (provider dropped). */
   label: string
   count: number
   /** The explicit dashed "no model" bucket for rows without a model. */
@@ -52,20 +65,21 @@ export interface ModelOption {
 }
 
 /**
- * Count the model triples over the rows, count-desc, with the no-model rows
+ * Count the BASE models over the rows, count-desc, with the no-model rows
  * kept as one explicit bucket (Q3a) so the failed "(untitled)" row stays
- * reachable instead of silently dropping out.
+ * reachable instead of silently dropping out. Mission 019: variants of one
+ * model collapse into a single bucket with summed counts.
  */
 export function modelOptions(rows: SessionInfo[]): ModelOption[] {
   const counts = new Map<string, number>()
   for (const s of rows) {
-    const key = s.model ? modelFullLabel(s.model) : NO_MODEL_KEY
+    const key = s.model ? modelBaseKey(s.model) : NO_MODEL_KEY
     counts.set(key, (counts.get(key) ?? 0) + 1)
   }
   return [...counts.entries()]
     .map(([key, count]) => ({
       key,
-      label: key === NO_MODEL_KEY ? "no model" : key,
+      label: key === NO_MODEL_KEY ? "no model" : modelShortLabel(key),
       count,
       noModel: key === NO_MODEL_KEY,
     }))
@@ -112,15 +126,23 @@ export function projectComboOptions(rows: SessionInfo[], allCount: number): Comb
   ]
 }
 
-/** Model combobox options: All first, then the triples plus the no-model bucket. */
+/**
+ * Model combobox options: All first, then the base models plus the no-model
+ * bucket. Mission 019: the label is the short id (the closed chip's
+ * short-form convention), the full base "providerID/id" rides along as the
+ * detail and the search text, so the provider prefix stays visible when open
+ * and searchable when typed — the same visible-short/hidden-full split the
+ * project options use.
+ */
 export function modelComboOptions(rows: SessionInfo[], allCount: number): ComboOption[] {
   return [
     allEntry(allCount),
     ...modelOptions(rows).map((m) => ({
       key: m.key,
       label: m.label,
+      detail: m.noModel ? undefined : m.key,
       count: m.count,
-      searchText: m.label,
+      searchText: m.noModel ? m.label : m.key,
       chip: true,
       dashed: m.noModel,
     })),
@@ -143,7 +165,9 @@ export function applyFilters(
   if (directory) out = out.filter((s) => s.location?.directory === directory)
   if (model)
     out = out.filter((s) =>
-      model === NO_MODEL_KEY ? !s.model : !!s.model && modelFullLabel(s.model) === model,
+      // Mission 019: the match is variant-agnostic — a base "providerID/id"
+      // filter selects every reasoning level of that model.
+      model === NO_MODEL_KEY ? !s.model : !!s.model && modelBaseKey(s.model) === model,
     )
   return out
 }

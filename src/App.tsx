@@ -32,9 +32,10 @@ export function App() {
   const [loaded, setLoaded] = useState(false)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [directory, setDirectory] = useState<string>("")
-  // Mission 013 (PC): the model filter — a full "providerID/id · variant" key
-  // or "" for all, with the same client-side post-filter semantics as
-  // `directory` (range switches keep it, like the project filter).
+  // Mission 013 (PC), 019 granularity: the model filter — a base
+  // "providerID/id" key (the reasoning variant ignored) or "" for all, with
+  // the same client-side post-filter semantics as `directory` (range
+  // switches keep it, like the project filter).
   const [model, setModel] = useState<string>("")
   // P2: collapsed every load; a parent id lands here only once it is expanded.
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())

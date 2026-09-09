@@ -340,12 +340,12 @@ describe("mission 014: filter card gating (tier 2 needs project and no model)", 
   })
 
   it("hides tier 2 for a model filter alone", () => {
-    expect(filterCardTier("", "p/m · max")).toBe("tier1")
+    expect(filterCardTier("", "p/m")).toBe("tier1")
   })
 
   it("hides tier 2 when both filters are active", () => {
     // Upstream cannot apply the model cut, so the project stats would lie.
-    expect(filterCardTier("/tmp/proj", "p/m · max")).toBe("tier1")
+    expect(filterCardTier("/tmp/proj", "p/m")).toBe("tier1")
   })
 
   it("treats the no-model bucket as a model filter", () => {
@@ -410,8 +410,8 @@ describe("mission 014: filter card label", () => {
     expect(filterCardLabel("/Users/joaosantos/Sites/personal/oc-setup", "")).toBe("oc-setup")
   })
 
-  it("uses the model's short id · variant form, matching the artifact", () => {
-    expect(filterCardLabel("", "opencode-go/glm-5.3-flash · max")).toBe("glm-5.3-flash · max")
+  it("uses the model's short id form, no provider and no variant (mission 019)", () => {
+    expect(filterCardLabel("", "opencode-go/glm-5.3-flash")).toBe("glm-5.3-flash")
   })
 
   it("renders the no-model bucket as 'no model'", () => {
@@ -419,7 +419,7 @@ describe("mission 014: filter card label", () => {
   })
 
   it("joins both filters when both are active", () => {
-    expect(filterCardLabel("/tmp/proj", "p/m · max")).toBe("proj · m · max")
+    expect(filterCardLabel("/tmp/proj", "p/m")).toBe("proj · m")
   })
 
   it("is empty when no filter is set", () => {
@@ -499,27 +499,27 @@ describe("mission 014: tier-1 totals come from the filtered rows", () => {
     expect(k.subagents).toBe(0)
   })
 
-  it("sums only the model filter's rows across directories", () => {
-    const k = kpisFromFallback(fallbackTotals(applyFilters(rows, "", "p/m · max")))
-    expect(k.cost).toBeCloseTo(1.25, 6)
-    expect(k.tokens).toBe(121)
-    expect(k.sessions).toBe(1)
+  it("sums both variants' rows under the base model filter, across directories", () => {
+    const k = kpisFromFallback(fallbackTotals(applyFilters(rows, "", "p/m")))
+    expect(k.cost).toBeCloseTo(1.75, 6)
+    expect(k.tokens).toBe(166)
+    expect(k.sessions).toBe(2)
     expect(k.subagents).toBe(1)
   })
 
   it("sums the intersection when both filters are active", () => {
-    const k = kpisFromFallback(fallbackTotals(applyFilters(rows, "/tmp/proj", "p/m · max")))
-    expect(k.cost).toBeCloseTo(1, 6)
-    expect(k.tokens).toBe(110)
-    expect(k.sessions).toBe(1)
+    const k = kpisFromFallback(fallbackTotals(applyFilters(rows, "/tmp/proj", "p/m")))
+    expect(k.cost).toBeCloseTo(1.5, 6)
+    expect(k.tokens).toBe(155)
+    expect(k.sessions).toBe(2)
     expect(k.subagents).toBe(0)
   })
 
   it("keeps the stats-only fields null in every case", () => {
     for (const [dir, model] of [
       ["/tmp/proj", ""],
-      ["", "p/m · max"],
-      ["/tmp/proj", "p/m · max"],
+      ["", "p/m"],
+      ["/tmp/proj", "p/m"],
     ] as const) {
       const k = kpisFromFallback(fallbackTotals(applyFilters(rows, dir, model)))
       expect(k.prompts).toBeNull()

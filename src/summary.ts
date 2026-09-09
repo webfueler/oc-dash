@@ -7,7 +7,7 @@ import type {
   SummaryOk,
   SummaryResponse,
 } from "./api"
-import { NO_MODEL_KEY } from "./filters"
+import { NO_MODEL_KEY, modelShortLabel } from "./filters"
 import { fmtUSD, isoDate } from "./format"
 import { tokenTotal } from "./tree"
 
@@ -237,17 +237,16 @@ export function projectIDForDirectory(rows: SessionInfo[], directory: string): s
 
 /**
  * The card header's filter descriptor, per the artifact mocks: the project's
- * basename ("oc-setup"), the model's short "id · variant" form (the full
- * triple is provider-prefixed; the artifact's card label is not), "no model"
- * for the no-model bucket. Empty when no filter is set.
+ * basename ("oc-setup"), the model's short id form without the variant (the
+ * model filter state is the base "providerID/id" since mission 019, and the
+ * short-form convention drops the provider prefix; the artifact's card label
+ * is not provider-prefixed), "no model" for the no-model bucket. Empty when
+ * no filter is set.
  */
 export function filterCardLabel(directory: string, model: string): string {
   const parts: string[] = []
   if (directory) parts.push(directory.split("/").pop() || directory)
-  if (model)
-    parts.push(
-      model === NO_MODEL_KEY ? "no model" : model.includes("/") ? model.slice(model.indexOf("/") + 1) : model,
-    )
+  if (model) parts.push(model === NO_MODEL_KEY ? "no model" : modelShortLabel(model))
   return parts.join(" · ")
 }
 
