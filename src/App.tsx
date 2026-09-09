@@ -8,7 +8,7 @@ import { KpiHeader } from "./components/KpiHeader"
 import { ModelsTable } from "./components/ModelsTable"
 import { RangeTabs } from "./components/RangeTabs"
 import { SessionsTable } from "./components/SessionsTable"
-import { applyFilters, directoryOptions, modelComboOptions, projectComboOptions } from "./filters"
+import { applyFilters, modelComboOptions, projectComboOptions, staleModelOption, staleProjectOption, withStaleOption } from "./filters"
 import { filterCardTier, modelRows, projectIDForDirectory, todayAccentDate } from "./summary"
 import {
   applyTheme,
@@ -124,18 +124,29 @@ export function App() {
     }
   }, [refresh])
 
-  const directories = useMemo(() => directoryOptions(sessions?.data ?? []), [sessions])
-
-  // Mission 013 (PA/PC): combobox options derived from the same rows the old
-  // select used — live counts over the visible range, All first with the
-  // payload count.
+  // Mission 013 (PA/PC), 020 always-visible: combobox options derived from
+  // the same rows the old select used — live counts over the visible range,
+  // All first with the payload count. withStaleOption re-adds a held filter
+  // value the current range has no rows for (7d pick faced with Today), so
+  // the always-rendered control shows the selected filter with a truthful
+  // 0 count instead of the raw key.
   const projectFilterOptions = useMemo(
-    () => projectComboOptions(sessions?.data ?? [], sessions?.count ?? 0),
-    [sessions],
+    () =>
+      withStaleOption(
+        projectComboOptions(sessions?.data ?? [], sessions?.count ?? 0),
+        directory,
+        staleProjectOption,
+      ),
+    [sessions, directory],
   )
   const modelFilterOptions = useMemo(
-    () => modelComboOptions(sessions?.data ?? [], sessions?.count ?? 0),
-    [sessions],
+    () =>
+      withStaleOption(
+        modelComboOptions(sessions?.data ?? [], sessions?.count ?? 0),
+        model,
+        staleModelOption,
+      ),
+    [sessions, model],
   )
 
   // Mission 013 (PC) + 014 (PD): directory AND model compose in this memo,
@@ -253,35 +264,35 @@ export function App() {
                     </button>
                   </div>
                 )}
-                {directories.length > 1 && (
-                  <div className="filter">
-                    Project{" "}
-                    <FilterCombobox
-                      ariaLabel="Filter projects"
-                      placeholder="Filter projects…"
-                      options={projectFilterOptions}
-                      value={directory}
-                      onChange={setDirectory}
-                    />
-                  </div>
-                )}
-                {/* Mission 013 (PC): the model combobox. Options always carry the
-                    All entry, so ">1" means at least one real model option; a
-                    set filter keeps the control visible even when the range has
-                    no matching rows, so it can always be cleared. */}
-                {(modelFilterOptions.length > 1 || model !== "") && (
-                  <div className="filter">
-                    Model{" "}
-                    <FilterCombobox
-                      ariaLabel="Filter models"
-                      placeholder="Filter models…"
-                      options={modelFilterOptions}
-                      value={model}
-                      onChange={setModel}
-                      align="right"
-                    />
-                  </div>
-                )}
+                {/* Mission 020 (Captain's pick): the project combobox renders
+                    ALWAYS — one directory, zero directories, or a held filter
+                    matching nothing in this range all keep the control on
+                    screen, so a filter picked under another range stays
+                    visible (and clearable) after a range switch. */}
+                <div className="filter">
+                  Project{" "}
+                  <FilterCombobox
+                    ariaLabel="Filter projects"
+                    placeholder="Filter projects…"
+                    options={projectFilterOptions}
+                    value={directory}
+                    onChange={setDirectory}
+                  />
+                </div>
+                {/* Mission 020: the model combobox renders ALWAYS on the same
+                    rule, including ranges with no model options (the All/zero
+                    state, or the held chip at 0 via withStaleOption). */}
+                <div className="filter">
+                  Model{" "}
+                  <FilterCombobox
+                    ariaLabel="Filter models"
+                    placeholder="Filter models…"
+                    options={modelFilterOptions}
+                    value={model}
+                    onChange={setModel}
+                    align="right"
+                  />
+                </div>
               </div>
             </div>
             {sessions?.truncated && (

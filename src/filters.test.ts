@@ -9,6 +9,9 @@ import {
   modelOptions,
   modelShortLabel,
   projectComboOptions,
+  staleModelOption,
+  staleProjectOption,
+  withStaleOption,
 } from "./filters"
 import { buildTree } from "./tree"
 import { sess } from "./tree.test"
@@ -182,6 +185,79 @@ describe("modelComboOptions", () => {
     expect(nm?.label).toBe("no model")
     expect(nm?.detail).toBeUndefined()
     expect(nm?.searchText).toBe("no model")
+  })
+})
+
+describe("withStaleOption (mission 020: filters always visible)", () => {
+  it("passes the options through when the value is empty or present", () => {
+    const project = projectComboOptions(rows(), 5)
+    expect(withStaleOption(project, "", staleProjectOption)).toBe(project)
+    expect(withStaleOption(project, OC_SETUP, staleProjectOption)).toBe(project)
+    const model = modelComboOptions(rows(), 5)
+    expect(withStaleOption(model, "github-copilot/gpt-5.6-luna", staleModelOption)).toBe(model)
+  })
+
+  it("re-adds a held project value the current range has no row for, at 0", () => {
+    // The Captain's case: a project picked in 7d, faced with a range whose
+    // rows hold nothing for it (here: an empty payload entirely).
+    const stale = withStaleOption(projectComboOptions([], 0), OC_SETUP, staleProjectOption)
+    expect(stale).toHaveLength(2)
+    expect(stale[0]).toMatchObject({ key: "", label: "All", count: 0, pinned: true })
+    expect(stale[1]).toEqual({
+      key: OC_SETUP,
+      label: "oc-setup",
+      detail: OC_SETUP,
+      count: 0,
+      searchText: OC_SETUP,
+    })
+  })
+
+  it("re-adds a held model value as the 019 short-form chip, at 0", () => {
+    const stale = withStaleOption(
+      modelComboOptions([], 0),
+      "opencode-go/glm-5.3-flash",
+      staleModelOption,
+    )
+    expect(stale[1]).toEqual({
+      key: "opencode-go/glm-5.3-flash",
+      label: "glm-5.3-flash",
+      detail: "opencode-go/glm-5.3-flash",
+      count: 0,
+      searchText: "opencode-go/glm-5.3-flash",
+      chip: true,
+      dashed: false,
+    })
+  })
+
+  it("re-adds the no-model selection when this range has no model-less rows", () => {
+    // rows() has one no-model row; a payload where every row carries a model
+    // drops the bucket, and the held NO_MODEL_KEY must stay representable.
+    const allModeled = rows().map((s, i) => ({
+      ...s,
+      model: { providerID: "p", id: `m${i}`, variant: "default" } as const,
+    }))
+    const stale = withStaleOption(
+      modelComboOptions(allModeled, allModeled.length),
+      NO_MODEL_KEY,
+      staleModelOption,
+    )
+    const nm = stale.find((o) => o.key === NO_MODEL_KEY)
+    expect(nm).toEqual({
+      key: NO_MODEL_KEY,
+      label: "no model",
+      detail: undefined,
+      count: 0,
+      searchText: "no model",
+      chip: true,
+      dashed: true,
+    })
+  })
+
+  it("does not duplicate the entry when the builder already has it", () => {
+    // The no-model bucket exists in rows(); withStaleOption must not append
+    // a second NO_MODEL_KEY row.
+    const opts = withStaleOption(modelComboOptions(rows(), 5), NO_MODEL_KEY, staleModelOption)
+    expect(opts.filter((o) => o.key === NO_MODEL_KEY)).toHaveLength(1)
   })
 })
 

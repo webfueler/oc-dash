@@ -150,6 +150,54 @@ export function modelComboOptions(rows: SessionInfo[], allCount: number): ComboO
 }
 
 /**
+ * Mission 020 (always-visible filters): the comboboxes render in every range,
+ * so a value picked under one range can face rows where it matches nothing —
+ * the Captain's case: a project selected in 7d stays selected under Today,
+ * where the walk has no row for it. The option builders above only see the
+ * current rows, so the held value would have no option row and the closed
+ * chip would fall back to the raw internal key (a full filesystem path, a
+ * provider-prefixed base). This appends a synthesized option for the held
+ * value when it is missing — same shape and label convention as its builder,
+ * count 0, the truthful number for this range — so the closed state always
+ * shows either the selected filter or the All/zero state, never a raw key.
+ * The open list shows it too (last, count-desc-consistent at 0), where
+ * picking All clears and picking the row keeps the value.
+ */
+export function withStaleOption(
+  options: ComboOption[],
+  value: string,
+  stale: (key: string) => ComboOption,
+): ComboOption[] {
+  if (!value || options.some((o) => o.key === value)) return options
+  return [...options, stale(value)]
+}
+
+/** The missing project option: basename shown, full path as detail/search. */
+export function staleProjectOption(path: string): ComboOption {
+  return {
+    key: path,
+    label: path.split("/").pop() || path,
+    detail: path,
+    count: 0,
+    searchText: path,
+  }
+}
+
+/** The missing model option: the 019 short-form chip, count 0. */
+export function staleModelOption(key: string): ComboOption {
+  const noModel = key === NO_MODEL_KEY
+  return {
+    key,
+    label: noModel ? "no model" : modelShortLabel(key),
+    detail: noModel ? undefined : key,
+    count: 0,
+    searchText: noModel ? "no model" : key,
+    chip: true,
+    dashed: noModel,
+  }
+}
+
+/**
  * Directory AND model in one pass, model applied after directory, both
  * before buildTree so a filtered-out parent cannot visibly promote its
  * children (tree.ts). No fetch ever carries these filters — this is the
