@@ -1,9 +1,11 @@
 import { serve } from "@hono/node-server"
 import { serveStatic } from "@hono/node-server/serve-static"
 import { Hono } from "hono"
+import { existsSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { errorMessage, getOpencode, ocGetJson, type OpencodeContext } from "./opencode.js"
 import { contextStatsRange, localTimezone, parseProjectParam, parseRangePreset, resolveRange } from "./ranges.js"
+import { compareVersions } from "./version.js"
 import { walkSessions, type RawPage } from "./walk.js"
 
 const PAGE_LIMIT = 100
@@ -13,6 +15,62 @@ const PORT = Number(process.env.PORT) || 4021
 // the launcher from wherever the user happens to be).
 const DIST_ROOT = fileURLToPath(new URL("../dist", import.meta.url))
 const DIST_INDEX = fileURLToPath(new URL("../dist/index.html", import.meta.url))
+
+// Mission 014: the update check. oc-dash's own version is read from the
+// manifest one level up (readFileSync sidesteps a bare JSON import, which
+// tsconfig.server.json's rootDir: "server" forbids; the URL resolves from
+// server/, dist-server/, and the published package alike). The registry's
+// latest rides on a small in-memory cache so no request ever waits on the
+// network, and every failure is swallowed (the /api/summary degraded
+// pattern). A checkout carries a .git entry at the package root and
+// published packages never do; when that signal is ambiguous the payload
+// falls back to the package command.
+let APP_VERSION = "unknown"
+try {
+  const pkg = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  ) as { version?: unknown }
+  if (typeof pkg.version === "string") APP_VERSION = pkg.version
+} catch {
+  // Best effort: an unreadable manifest only costs the version label.
+}
+
+const UPDATE_COMMAND = existsSync(new URL("../.git", import.meta.url))
+  ? "git pull --ff-only && npm install"
+  : "npx @webfueler/oc-dash@latest"
+
+const REGISTRY_DIST_TAGS = "https://registry.npmjs.org/-/package/@webfueler%2Foc-dash/dist-tags"
+const UPDATE_CACHE_MS = 6 * 60 * 60 * 1000
+const UPDATE_RETRY_MS = 5 * 60 * 1000
+
+let updateCache: { latest: string | null; expiresAt: number } | null = null
+
+/** Best-effort registry read; any failure is null, never an error surface. */
+async function fetchLatestVersion(): Promise<string | null> {
+  try {
+    const res = await fetch(REGISTRY_DIST_TAGS, { signal: AbortSignal.timeout(5_000) })
+    if (!res.ok) return null
+    const body = (await res.json()) as { latest?: unknown }
+    return typeof body.latest === "string" ? body.latest : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The cached answer, refreshed in the background when cold or stale.
+ * Successful answers live 6 hours, failures retry after 5 minutes, and the
+ * caller always gets the value on hand so /api/health never blocks on it.
+ */
+function latestPublishedVersion(): string | null {
+  if (!updateCache || Date.now() >= updateCache.expiresAt) {
+    updateCache = { latest: updateCache?.latest ?? null, expiresAt: Date.now() + UPDATE_RETRY_MS }
+    void fetchLatestVersion().then((latest) => {
+      updateCache = { latest, expiresAt: Date.now() + (latest ? UPDATE_CACHE_MS : UPDATE_RETRY_MS) }
+    })
+  }
+  return updateCache.latest
+}
 
 const app = new Hono()
 
@@ -58,6 +116,13 @@ async function statsCall(
 }
 
 app.get("/api/health", async (c) => {
+  const latest = latestPublishedVersion()
+  const dashboard = {
+    version: APP_VERSION,
+    latest,
+    updateAvailable: latest !== null && compareVersions(latest, APP_VERSION) > 0,
+    updateCommand: UPDATE_COMMAND,
+  }
   try {
     const oc = await getOpencode()
     const body = (await ocGetJson(oc, "/api/health")) as {
@@ -66,6 +131,7 @@ app.get("/api/health", async (c) => {
     } | null
     return c.json({
       ok: true,
+      dashboard,
       service: {
         url: oc.endpoint.url,
         healthy: body?.healthy === true,
@@ -75,6 +141,7 @@ app.get("/api/health", async (c) => {
   } catch (err) {
     return c.json({
       ok: true,
+      dashboard,
       service: {
         url: null,
         healthy: false,

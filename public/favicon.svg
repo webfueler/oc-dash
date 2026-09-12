@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    .tile { fill: #161b22; stroke: #30363d; }
+    .prompt { stroke: #4493f8; }
+    .cursor { fill: #7ee2a8; }
+    @media (prefers-color-scheme: light) {
+      .tile { fill: #ffffff; stroke: #d0d7de; }
+      .prompt { stroke: #0969da; }
+      .cursor { fill: #1a7f37; }
+    }
+  </style>
+  <rect class="tile" x="4" y="4" width="56" height="56" rx="12" stroke-width="4"/>
+  <path class="prompt" d="M20 21 L33 32 L20 43" fill="none" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect class="cursor" x="38" y="36" width="14" height="8" rx="2"/>
+</svg>

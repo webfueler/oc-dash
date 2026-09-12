@@ -106,8 +106,21 @@ export interface SessionsPayload {
   data: SessionInfo[]
 }
 
+export interface DashboardUpdate {
+  version: string
+  latest: string | null
+  updateAvailable: boolean
+  updateCommand: string
+}
+
 export interface HealthResponse {
   ok: boolean
+  /**
+   * Mission 014: oc-dash's own version and the registry's latest. The real
+   * server always sends it; the client's fabricated unreachable-fallback
+   * below omits it, so the update notice treats it as optional.
+   */
+  dashboard?: DashboardUpdate
   service: {
     url: string | null
     healthy: boolean

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { HealthResponse, Range, SessionsPayload, SummaryResponse } from "./api"
+import type { DashboardUpdate, HealthResponse, Range, SessionsPayload, SummaryResponse } from "./api"
 import { fetchHealth, fetchSessions, fetchSummary } from "./api"
 import { ActivityChart } from "./components/ActivityChart"
 import { FilterCombobox } from "./components/FilterCombobox"
@@ -204,6 +204,7 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <h1>oc-dash</h1>
+        <span className="app-version dim">v{__APP_VERSION__}</span>
         <RangeTabs range={range} onChange={changeRange} />
         <ThemeTabs theme={theme} onChange={changeTheme} />
         <span className="updated dim">
@@ -212,6 +213,7 @@ export function App() {
       </header>
 
       <HealthBanner health={health} />
+      <UpdateNotice dashboard={health?.dashboard} />
 
       {summaryError && (
         <div className="error" role="alert">
@@ -352,6 +354,69 @@ function HealthBanner({ health }: { health: HealthResponse | null }) {
       {svc.healthy
         ? `opencode service healthy · ${svc.url ?? "unknown url"}${svc.version ? ` · v${svc.version}` : ""}`
         : `opencode service unreachable${svc.error ? ` — ${svc.error}` : ""}`}
+    </div>
+  )
+}
+
+const UPDATE_DISMISS_KEY = "oc-dash.update-dismissed"
+
+/**
+ * Mission 014: the dismissible update notice, below the health banner. It
+ * renders only when /api/health says a newer version is published, and the
+ * dismissal is keyed to that version so a later release can surface again.
+ * Reload is the action that actually picks up a checkout update, because
+ * the SPA keeps its loaded JS until the page reloads.
+ */
+function UpdateNotice({ dashboard }: { dashboard?: DashboardUpdate }) {
+  const storage = browserStorage()
+  const latest = dashboard?.latest ?? null
+  const [dismissed, setDismissed] = useState<string | null>(() => {
+    try {
+      return storage?.getItem(UPDATE_DISMISS_KEY) ?? null
+    } catch {
+      return null
+    }
+  })
+  const [copied, setCopied] = useState<"idle" | "copied" | "failed">("idle")
+  if (!dashboard?.updateAvailable || !latest || dismissed === latest) return null
+
+  const dismiss = () => {
+    try {
+      storage?.setItem(UPDATE_DISMISS_KEY, latest)
+    } catch {
+      // Storage unavailable: the dismissal lasts for this session only.
+    }
+    setDismissed(latest)
+  }
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(dashboard.updateCommand)
+      setCopied("copied")
+    } catch {
+      setCopied("failed")
+    }
+  }
+  const copyLabel =
+    copied === "copied" ? "copied" : copied === "failed" ? "copy failed" : "copy update command"
+
+  return (
+    <div className="update-notice">
+      <span className="up" aria-hidden>
+        ↑
+      </span>
+      <span>
+        oc-dash v{latest} is available (running v{dashboard.version})
+      </span>
+      <code className="update-command">{dashboard.updateCommand}</code>
+      <button type="button" onClick={() => void copy()}>
+        {copyLabel}
+      </button>
+      <button type="button" onClick={() => window.location.reload()}>
+        reload
+      </button>
+      <button type="button" onClick={dismiss}>
+        dismiss
+      </button>
     </div>
   )
 }
