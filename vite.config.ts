@@ -4,9 +4,12 @@ import { defineConfig } from "vitest/config"
 export default defineConfig({
   plugins: [react()],
   server: {
+		host: true,
     port: 5273,
+		strictPort: true,
+		allowedHosts: ["omarchy-one.localdomain"],    
     proxy: {
-      "/api": "http://localhost:4021",
+      "/api": "http://0.0.0.0:4021",
     },
   },
   test: {
