@@ -282,8 +282,8 @@ More options: https://opencode.ai`)
 
 await checkServiceAtStartup()
 
-const server = serve({ fetch: app.fetch, port: PORT, hostname: "0.0.0.0" }, (info) => {
-  console.log(`oc-dash listening on http://0.0.0.0:${info.port}`)
+const server = serve({ fetch: app.fetch, port: PORT, hostname: "127.0.0.1" }, (info) => {
+  console.log(`oc-dash listening on http://127.0.0.1:${info.port}`)
 })
 
 server.on("error", (err) => {
