@@ -97,10 +97,14 @@ app.get("/api/summary", async (c) => {
   // card's tier-2 tiles. Fired in parallel with the main call so the hero's
   // latency is untouched; on failure it resolves to undefined and the field
   // is omitted (the contextActivity pattern), never an error surface.
-  const project = parseProjectParam(c.req.query("project"))
+  const project = parseProjectParam(c.req.query("project")) ?? []
   try {
     const oc = await getOpencode()
-    const projectCall = project ? statsCall(oc, range, tz, project).catch(() => undefined) : undefined
+    // Mission 026: one best-effort upstream stats call per project id behind
+    // the directory filter, all fired in parallel with the main call so the
+    // hero's latency is untouched. A failed call drops out of the list; the
+    // field is omitted when none succeed (never an error surface).
+    const projectCalls = project.map((id) => statsCall(oc, range, tz, id).catch(() => null))
     const raw = await statsCall(oc, range, tz)
     // The promise client returns SessionStatsInfo directly; a raw fetch
     // returns { data: SessionStatsInfo }. Normalize both.
@@ -113,18 +117,21 @@ app.get("/api/summary", async (c) => {
     ) {
       throw new Error("unexpected /api/session/stats payload shape")
     }
-    let projectStats: { project: string; data: unknown } | undefined
-    if (project && projectCall) {
-      const pRaw = await projectCall
-      const pData = (pRaw as { data?: unknown } | null)?.data ?? pRaw
-      if (
-        pData &&
-        typeof pData === "object" &&
-        typeof (pData as { cost?: unknown }).cost === "number"
-      ) {
-        // The project id rides along so the client can verify the field
-        // belongs to the filter currently on screen before trusting it.
-        projectStats = { project, data: pData }
+    const projectStats: { project: string; data: unknown }[] = []
+    if (projectCalls.length > 0) {
+      const settled = await Promise.all(projectCalls)
+      for (let i = 0; i < settled.length; i++) {
+        const pRaw = settled[i]
+        const pData = (pRaw as { data?: unknown } | null)?.data ?? pRaw
+        if (
+          pData &&
+          typeof pData === "object" &&
+          typeof (pData as { cost?: unknown }).cost === "number"
+        ) {
+          // The project id rides along so the client can verify the field
+          // belongs to the filter currently on screen before trusting it.
+          projectStats.push({ project: project[i], data: pData })
+        }
       }
     }
     // Additive, Today-only: trailing 7 days of activity so the chart can
@@ -147,7 +154,7 @@ app.get("/api/summary", async (c) => {
       timezone: tz,
       data,
       ...(contextActivity !== undefined ? { contextActivity } : {}),
-      ...(projectStats !== undefined ? { projectStats } : {}),
+      ...(projectStats.length > 0 ? { projectStats } : {}),
     })
   } catch (err) {
     // Degraded marker instead of an error page when stats are unavailable.

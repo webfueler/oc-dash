@@ -71,11 +71,13 @@ export interface SummaryOk {
   contextActivity?: ActivityDay[]
   /**
    * Mission 014 (PD Q4a): additive, present only when the request carried
-   * project=<id> and the extra upstream stats call succeeded. The project
-   * id is echoed so the client can match the field to the filter on screen
-   * before trusting its numbers.
+   * project=<id(s)> and the extra upstream stats call(s) succeeded. Each
+   * project id is echoed so the client can match the payloads to the filter
+   * on screen before trusting their numbers. Mission 026: a list — one
+   * payload per requested project id, since a directory can map to more
+   * than one.
    */
-  projectStats?: ProjectStats
+  projectStats?: ProjectStats[]
 }
 
 /**
@@ -121,9 +123,11 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 /**
- * Mission 014 (PD Q4a): optional project pass-through. Existing callers are
- * unaffected — the param is sent only while the tier-2 gate wants it, and
- * /api/summary without it returns exactly today's keys.
+ * Mission 014 (PD Q4a): optional project pass-through. Mission 026: the
+ * param carries a comma-separated list of project ids (all the ids behind
+ * the directory filter). Existing callers are unaffected — the param is
+ * sent only while the card wants project-scoped stats, and /api/summary
+ * without it returns exactly the same keys as before.
  */
 export function fetchSummary(range: Range, project?: string): Promise<SummaryResponse> {
   const suffix = project ? `&project=${encodeURIComponent(project)}` : ""

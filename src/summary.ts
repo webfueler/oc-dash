@@ -1,5 +1,6 @@
 import type {
   ModelUsage,
+  ProjectStats,
   Range,
   SessionInfo,
   SessionStatsInfo,
@@ -7,7 +8,7 @@ import type {
   SummaryOk,
   SummaryResponse,
 } from "./api"
-import { NO_MODEL_KEY, modelShortLabel } from "./filters"
+import { NO_MODEL_KEY, applyFilters, modelBaseKey, modelShortLabel } from "./filters"
 import { isoDate } from "./format"
 import { tokenTotal } from "./tree"
 
@@ -211,28 +212,25 @@ export function filterCardTier(directory: string, model: string): FilterCardTier
 }
 
 /**
- * The project id upstream stats counts for a directory filter. Rows carry
- * projectID; the most common one among the directory's rows wins (ties keep
- * the first seen). Null when the filter matches nothing or rows carry no
- * projectID — the tier-2 param is then not sent at all.
+ * The project ids upstream stats counts for a directory filter. Rows carry
+ * projectID; Mission 026: ALL distinct ids behind the directory come back,
+ * ordered count-desc with first-seen kept on ties (so index 0 is the id the
+ * pre-026 single-pick returned). Empty when the filter matches nothing or
+ * rows carry no projectID — the project param is then not sent at all.
  */
-export function projectIDForDirectory(rows: SessionInfo[], directory: string): string | null {
-  if (!directory) return null
+export function projectIDForDirectory(rows: SessionInfo[], directory: string): string[] {
+  if (!directory) return []
   const counts = new Map<string, number>()
-  let best: string | null = null
-  let bestCount = 0
+  const order: string[] = []
   for (const s of rows) {
     if (s.location?.directory !== directory) continue
     const pid = s.projectID
     if (!pid) continue
-    const n = (counts.get(pid) ?? 0) + 1
-    counts.set(pid, n)
-    if (n > bestCount) {
-      best = pid
-      bestCount = n
-    }
+    if (!counts.has(pid)) order.push(pid)
+    counts.set(pid, (counts.get(pid) ?? 0) + 1)
   }
-  return best
+  // Stable sort: first-seen order survives the count-desc reorder on ties.
+  return order.sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0))
 }
 
 /**
@@ -274,4 +272,194 @@ export function projectStatsUsable(
 ): boolean {
   if (!stats) return false
   return stats.sessions + stats.subagents > 0 || rowSessions + rowSubagents === 0
+}
+
+/**
+ * Mission 026: the filtered card's money, resolved per active filter
+ * combination from the message-level stats engine the hero already rides.
+ *
+ * - Model filter only: the GLOBAL stats payload's models[] row matching
+ *   providerID + modelID, variant-agnostic (all variants summed). No
+ *   directory axis, so the exclusivity cut does not apply here.
+ * - Directory filter: per-project stats totals, one payload per project id
+ *   behind the directory, costs summed — but ONLY when every id is
+ *   exclusive to the directory (mission 028 below).
+ * - Directory AND model: the per-project models[] rows, summed across that
+ *   directory's project ids, under the same exclusivity gate.
+ *
+ * Mission 028 (H1): upstream scopes stats by project id, not by directory,
+ * so a payload for an id that also has sessions in another directory
+ * carries that other directory's money. An id is EXCLUSIVE to the directory
+ * iff every walked row carrying it belongs to the directory. Directory
+ * money is all-or-nothing: every id exclusive AND the walk not truncated,
+ * or the WHOLE money falls back to the labeled row sum — never a mix of
+ * exact and fallback shares.
+ *
+ * Fallbacks stay honest: when the stats route cannot serve the combination
+ * (window mismatch, failed fetch, missing payload or models[] array, a
+ * zeros-guard failure, a non-exclusive id, a truncated walk) the value is
+ * the existing client-side row sum and `source` is "fallback" — the
+ * component must label it approximate. When the stats payload has NO
+ * matching models[] row while session rows DO match the filter, `conflict`
+ * is set and the money falls back: the two sources disagree and neither
+ * number may be shown silently.
+ */
+export interface CardMoney {
+  cost: number
+  /** "stats" = message-level exact; "fallback" = row sum, label approximate */
+  source: "stats" | "fallback"
+  /** stats served no models[] row for this model while session rows claim it */
+  conflict: boolean
+}
+
+export interface CardMoneyInput {
+  directory: string
+  /** Base model key "providerID/id" (variant-agnostic), NO_MODEL_KEY, or "" */
+  model: string
+  /** The post-filter session rows — the fallback sum and conflict evidence */
+  rows: SessionInfo[]
+  /** The session payload the rows came from; fixes the row-walk window */
+  sessions: SessionsPayload | null | undefined
+  /** The healthy global stats payload, undefined when degraded/missing */
+  summary: SummaryOk | undefined
+  /** Per-project stats payloads for the directory's ids, when fetched */
+  projectStats: ProjectStats[] | undefined
+  /** ALL project ids behind the directory (projectIDForDirectory) */
+  projectIDs: string[]
+}
+
+/**
+ * The stats models[] cost for one base model: variant-agnostic — every
+ * matching row (all reasoning levels) is summed. Returns null when the
+ * models[] array is missing or carries no row for the model; a matched row
+ * costing $0 is a real zero and returns 0.
+ */
+function statsModelCost(
+  models: ModelUsage[] | undefined,
+  model: string,
+): number | null {
+  if (!Array.isArray(models)) return null
+  let total = 0
+  let matched = false
+  for (const m of models) {
+    if (!m.model) continue
+    if (modelBaseKey({ providerID: m.model.providerID, id: m.model.id }) === model) {
+      matched = true
+      total += m.cost ?? 0
+    }
+  }
+  return matched ? total : null
+}
+
+export function cardMoney(input: CardMoneyInput): CardMoney {
+  const fallback: CardMoney = {
+    cost: fallbackTotals(input.rows).cost,
+    source: "fallback",
+    conflict: false,
+  }
+  const summary = input.summary
+  // The card never renders without a filter, but an unfiltered call is row
+  // money by definition.
+  if (!input.directory && !input.model) return fallback
+  // No stats payload, or its window does not match the session payload on
+  // screen (a range switch mid-flight): never mix windows in one number.
+  if (!summary) return fallback
+  if (input.sessions && summary.range.preset !== input.sessions.range.preset) return fallback
+  // The "no model" bucket is not a model — stats has no row for it.
+  if (input.model === NO_MODEL_KEY) return fallback
+
+  if (!input.directory) {
+    // Model filter only: the global payload's models[] row.
+    const stats = summary.data
+    const walk = fallbackTotals(input.sessions?.data ?? [])
+    if (!projectStatsUsable(stats, walk.sessions, walk.subagents)) return fallback
+    const cost = statsModelCost(stats.models, input.model)
+    if (cost == null) {
+      // Row absent: if session rows claim this model the two sources
+      // disagree — surface the conflict via fallback; if nothing claims it,
+      // message-level $0 is the exact truth.
+      if (input.rows.length > 0) return { ...fallback, conflict: true }
+      return { cost: 0, source: "stats", conflict: false }
+    }
+    return { cost, source: "stats", conflict: false }
+  }
+
+  // Directory branches: every project id behind the directory must have a
+  // usable payload, or the combination is not served.
+  const ids = input.projectIDs
+  if (ids.length === 0) return fallback
+  // Mission 028 (H1): the exclusivity cut, before any payload is trusted.
+  // A truncated walk (or no walk payload at all, so the truncation flag is
+  // not visible) counts as non-exclusive: the id set itself could be
+  // incomplete and the walked rows are not the whole story.
+  if (!input.sessions || input.sessions.truncated) return fallback
+  const walkRows = input.sessions.data
+  for (const id of ids) {
+    for (const row of walkRows) {
+      if (row.projectID === id && row.location?.directory !== input.directory) return fallback
+    }
+  }
+  const byId = new Map((input.projectStats ?? []).map((p) => [p.project, p.data]))
+  const dirRows = applyFilters(input.sessions?.data ?? [], input.directory, "")
+  for (const id of ids) {
+    const data = byId.get(id)
+    // Missing payload: the fetch failed or the shape check dropped it.
+    if (!data) return fallback
+    // Zeros guard PER payload, against that project's own walked rows.
+    const own = fallbackTotals(dirRows.filter((r) => r.projectID === id))
+    if (!projectStatsUsable(data, own.sessions, own.subagents)) return fallback
+  }
+
+  if (!input.model) {
+    // Directory only: the payloads' exact totals, summed.
+    let total = 0
+    for (const id of ids) total += byId.get(id)!.cost
+    return { cost: total, source: "stats", conflict: false }
+  }
+
+  // Directory AND model: the per-project models[] rows, summed across ids.
+  let total = 0
+  for (const id of ids) {
+    const data = byId.get(id)!
+    // The whole models[] array missing: the payload cannot honor the cut.
+    if (!Array.isArray(data.models)) return fallback
+    const cost = statsModelCost(data.models, input.model)
+    if (cost == null) {
+      if (input.rows.length > 0) return { ...fallback, conflict: true }
+      continue
+    }
+    total += cost
+  }
+  return { cost: total, source: "stats", conflict: false }
+}
+
+/**
+ * Mission 028 (M1): the card's money sub-line. Every note must be TRUE of
+ * the number it accompanies. Stats money is message-level: it excludes
+ * compaction usage and never sees the session rows' upstream cost drift.
+ * The row sum is directory-correct but session-level: it includes
+ * compaction usage and upstream session_v2 drift, and its model labels are
+ * each session's last model — so a fallback under a model filter names that
+ * misattribution, and a directory fallback names the compaction inclusion
+ * instead. The fallback lines never claim "excludes compaction usage".
+ */
+export function moneySubLine(money: CardMoney, model: string): string {
+  if (money.source === "stats") return "excludes compaction usage"
+  return model ? "approximate — sessions' last model" : "approximate — includes compaction usage"
+}
+
+/**
+ * Mission 028 (M1): the money clause for the card's note paragraphs, same
+ * discipline as moneySubLine — true of the number it accompanies, on every
+ * path.
+ */
+export function moneyNote(money: CardMoney, model: string): string {
+  if (money.source === "stats") {
+    return model
+      ? "cost is message-level exact from the stats endpoint — excludes compaction usage"
+      : "money from the stats endpoint (message-level), excludes compaction usage"
+  }
+  return model
+    ? "cost is the approximate row sum (sessions' last model)"
+    : "money is the approximate row sum (includes compaction usage)"
 }

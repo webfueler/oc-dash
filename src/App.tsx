@@ -9,7 +9,7 @@ import { ModelsTable } from "./components/ModelsTable"
 import { RangeTabs } from "./components/RangeTabs"
 import { SessionsTable } from "./components/SessionsTable"
 import { applyFilters, modelComboOptions, projectComboOptions, staleModelOption, staleProjectOption, withStaleOption } from "./filters"
-import { filterCardTier, modelRows, projectIDForDirectory, todayAccentDate } from "./summary"
+import { modelRows, projectIDForDirectory, todayAccentDate } from "./summary"
 import {
   applyTheme,
   browserStorage,
@@ -45,16 +45,22 @@ export function App() {
   // mirrors it so the control's active segment matches what is on screen.
   const [theme, setTheme] = useState<ThemeChoice>(() => readStoredTheme(browserStorage()))
 
-  // Mission 014 (PD Q4a): the tier-2 project pass-through. Only a project
-  // filter without a model filter sends project=<id> on /api/summary (the
-  // gating rule); the id comes from the rows themselves (rows carry
-  // projectID). In refresh's dep array so every poll carries it and a
-  // filter change refetches immediately; the derived string is stable
-  // across polls, so ordinary refreshes add no extra fetches.
-  const tier2Project = useMemo(() => {
-    if (filterCardTier(directory, model) !== "tier2") return null
-    return projectIDForDirectory(sessions?.data ?? [], directory)
-  }, [sessions, directory, model])
+  // Mission 014 (PD Q4a) + 026: project pass-through. Whenever a directory
+  // filter is active (with or without a model filter — the per-project
+  // models[] rows also feed the card's money under directory+model), the
+  // request carries project=<id[,id...]> for ALL project ids behind the
+  // directory. The derived string is stable across polls, so ordinary
+  // refreshes add no extra fetches and the refresh identity stays put.
+  const cardProjectsParam = useMemo(() => {
+    if (!directory) return ""
+    return projectIDForDirectory(sessions?.data ?? [], directory).join(",")
+  }, [sessions, directory])
+
+  // Mission 026: the array form the card consumes (payload matching, money).
+  const cardProjectIDs = useMemo(
+    () => (cardProjectsParam ? cardProjectsParam.split(",") : []),
+    [cardProjectsParam],
+  )
 
   // P2: switching range collapses the tree again.
   const changeRange = useCallback((r: Range) => {
@@ -77,7 +83,7 @@ export function App() {
 
   const refresh = useCallback(async () => {
     const [r1, r2, r3] = await Promise.allSettled([
-      fetchSummary(range, tier2Project ?? undefined),
+      fetchSummary(range, cardProjectsParam || undefined),
       fetchSessions(range),
       fetchHealth(),
     ])
@@ -101,7 +107,7 @@ export function App() {
       })
     setUpdatedAt(new Date())
     setLoaded(true)
-  }, [range, tier2Project])
+  }, [range, cardProjectsParam])
 
   useEffect(() => {
     // All setState calls in refresh() happen after `await`, so nothing here
@@ -277,7 +283,7 @@ export function App() {
               summary={summary}
               sessions={sessions}
               activeRange={range}
-              projectID={tier2Project}
+              projectIDs={cardProjectIDs}
             />
           )}
 

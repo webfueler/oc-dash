@@ -52,13 +52,20 @@ export function contextStatsRange(preset: RangePreset, now: Date = new Date()): 
 
 /**
  * Mission 014 (PD Q4a): additive project pass-through for /api/summary.
- * Trimmed and non-empty or it is not a project filter at all; hard-capped
- * so a junk param cannot build an absurd upstream URL — anything unusable
- * becomes undefined and the server makes no extra upstream call. The
+ * Mission 026: the param now carries a comma-separated list of project ids
+ * (a directory can map to more than one id — the personal directory maps
+ * to two), and the parser returns them deduped, order-preserved. Trimmed
+ * and non-empty or it is not a project filter at all; hard-capped so a
+ * junk param cannot build an absurd upstream URL — anything unusable
+ * becomes undefined and the server makes no extra upstream call. Mission
+ * 028 (L1): the total cap is now 4096 chars — the old 200 predates id
+ * lists and would reject five real 40-hex ids plus separators. The
  * upstream call itself stays best-effort in the handler.
  */
-export function parseProjectParam(value: string | undefined | null): string | undefined {
+export function parseProjectParam(value: string | undefined | null): string[] | undefined {
   const v = value?.trim()
-  if (!v || v.length > 200) return undefined
-  return v
+  if (!v || v.length > 4096) return undefined
+  const ids = [...new Set(v.split(",").map((s) => s.trim()).filter((s) => s.length > 0))]
+  if (ids.length === 0 || ids.length > 10) return undefined
+  return ids
 }
