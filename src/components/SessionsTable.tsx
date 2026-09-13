@@ -1,7 +1,7 @@
 import type { ModelNames, SessionInfo } from "../api"
 import { fmtInt, fmtTokens, fmtUSD, outcomeView, relTime } from "../format"
 import { modelBaseKey, modelDisplayName } from "../filters"
-import type { SessionNode } from "../tree"
+import type { SessionNode, SortKey, SortState } from "../tree"
 
 /**
  * P2/P3/P4: the tree ships collapsed (an id is visible-expanded only when it
@@ -14,12 +14,17 @@ export function SessionsTable({
   expanded,
   onToggle,
   names,
+  sort,
+  onSort,
 }: {
   nodes: SessionNode[]
   expanded: ReadonlySet<string>
   onToggle: (id: string) => void
   /** Mission 044: providerID/id -> display name; missing keys keep the raw id. */
   names?: ModelNames
+  /** Mission 058: the active column sort; `null` is the default order. */
+  sort: SortState | null
+  onSort: (key: SortKey) => void
 }) {
   if (nodes.length === 0) return <p className="empty">No sessions in this range.</p>
   return (
@@ -29,15 +34,47 @@ export function SessionsTable({
           <th>Session</th>
           <th>Agent</th>
           <th>Model</th>
-          <th className="num">Own cost</th>
-          <th className="num">Incl. subagents</th>
-          <th className="num">Tokens</th>
+          <SortHeader label="Own cost" column="own" sort={sort} onSort={onSort} />
+          <SortHeader label="Incl. subagents" column="incl" sort={sort} onSort={onSort} />
+          <SortHeader label="Tokens" column="tokens" sort={sort} onSort={onSort} />
           <th>Last activity</th>
           <th>Outcome</th>
         </tr>
       </thead>
       <tbody>{nodes.flatMap((n) => rows(n, 0, expanded, onToggle, names))}</tbody>
     </table>
+  )
+}
+
+/**
+ * Mission 058: an interactive column header. A real button keeps the header
+ * keyboard operable; `aria-sort` and the arrow carry the active direction,
+ * and activating cycles the column (the transition lives in tree.ts).
+ */
+function SortHeader({
+  label,
+  column,
+  sort,
+  onSort,
+}: {
+  label: string
+  column: SortKey
+  sort: SortState | null
+  onSort: (key: SortKey) => void
+}) {
+  const dir = sort?.key === column ? sort.dir : null
+  const ariaSort = dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none"
+  return (
+    <th className="num" aria-sort={ariaSort}>
+      <button type="button" className="sort-th" onClick={() => onSort(column)}>
+        {label}
+        {dir && (
+          <span className="sort-arrow" aria-hidden>
+            {dir === "asc" ? "↑" : "↓"}
+          </span>
+        )}
+      </button>
+    </th>
   )
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { SessionInfo, TokenUsage } from "./api"
-import { allParentIds, buildTree, tokenTotal, type SessionNode } from "./tree"
+import { allParentIds, buildTree, nextSortState, sortNodes, tokenTotal, type SessionNode } from "./tree"
 
 export function sess(partial: Partial<SessionInfo> & { id: string }): SessionInfo {
   return {
@@ -154,5 +154,170 @@ describe("recursive rollup", () => {
     const tree = buildTree([child, parent])
     expect(tree[0].inclCost).toBeCloseTo(2.1948, 6)
     expect(tree[0].inclCost).toBeGreaterThan(tree[0].ownCost)
+  })
+})
+
+const tok = (input: number): TokenUsage => ({
+  input,
+  output: 0,
+  reasoning: 0,
+  cache: { read: 0, write: 0 },
+})
+
+/** Pre-order ids, the order the table walks (children follow their parent). */
+const idsOf = (nodes: SessionNode[]): string[] => {
+  const out: string[] = []
+  const walk = (list: SessionNode[]): void => {
+    for (const n of list) {
+      out.push(n.session.id)
+      walk(n.children)
+    }
+  }
+  walk(nodes)
+  return out
+}
+
+describe("sortNodes", () => {
+  /**
+   * Mission 058: the fixture separates all three keys — own, incl, and
+   * tokens orders all differ — and `a`'s subagent carries tokens so the
+   * token basis cannot be swapped for the `inclTokens` rollup (100 vs 1100).
+   *   ownCost:   a=1  < c=3  < b=5
+   *   inclCost:  c=3  < b=5  < a=11
+   *   ownTokens: c=50 < a=100 < b=500
+   */
+  const threeRoots = () =>
+    buildTree([
+      sess({ id: "a", cost: 1, tokens: tok(100) }),
+      sess({ id: "b", cost: 5, tokens: tok(500) }),
+      sess({ id: "c", cost: 3, tokens: tok(50) }),
+      sess({ id: "ax", parentID: "a", cost: 10, tokens: tok(1000) }),
+    ])
+
+  it("orders Own cost both ways by ownCost", () => {
+    expect(idsOf(sortNodes(threeRoots(), { key: "own", dir: "asc" }))).toEqual([
+      "a",
+      "ax",
+      "c",
+      "b",
+    ])
+    expect(idsOf(sortNodes(threeRoots(), { key: "own", dir: "desc" }))).toEqual([
+      "b",
+      "c",
+      "a",
+      "ax",
+    ])
+  })
+
+  it("orders Incl. subagents both ways by inclCost", () => {
+    expect(idsOf(sortNodes(threeRoots(), { key: "incl", dir: "asc" }))).toEqual([
+      "c",
+      "b",
+      "a",
+      "ax",
+    ])
+    expect(idsOf(sortNodes(threeRoots(), { key: "incl", dir: "desc" }))).toEqual([
+      "a",
+      "ax",
+      "b",
+      "c",
+    ])
+  })
+
+  it("orders Tokens both ways by ownTokens, not the inclTokens rollup", () => {
+    expect(idsOf(sortNodes(threeRoots(), { key: "tokens", dir: "asc" }))).toEqual([
+      "c",
+      "a",
+      "ax",
+      "b",
+    ])
+    expect(idsOf(sortNodes(threeRoots(), { key: "tokens", dir: "desc" }))).toEqual([
+      "b",
+      "a",
+      "ax",
+      "c",
+    ])
+  })
+
+  it("breaks value ties by time.updated descending, missing last, stable on full ties", () => {
+    const older = sess({ id: "older", cost: 2, time: { created: 0, updated: 100 } })
+    const newer = sess({ id: "newer", cost: 2, time: { created: 0, updated: 300 } })
+    // The API type requires `updated`, but payload rows can omit it.
+    const missing = sess({
+      id: "missing",
+      cost: 2,
+      time: { created: 0, updated: undefined as unknown as number },
+    })
+    const alsoMissing = sess({
+      id: "alsomissing",
+      cost: 2,
+      time: { created: 0, updated: undefined as unknown as number },
+    })
+    const nodes = buildTree([older, newer, missing, alsoMissing])
+    // The tiebreak is direction-independent: newer first, then older, then
+    // both missing rows in their base (input) order.
+    expect(idsOf(sortNodes(nodes, { key: "own", dir: "asc" }))).toEqual([
+      "newer",
+      "older",
+      "missing",
+      "alsomissing",
+    ])
+    expect(idsOf(sortNodes(nodes, { key: "own", dir: "desc" }))).toEqual([
+      "newer",
+      "older",
+      "missing",
+      "alsomissing",
+    ])
+  })
+
+  it("orders siblings under every parent, not just the roots", () => {
+    const p = sess({ id: "p" })
+    const cLight = sess({ id: "cl", parentID: "p", cost: 1 })
+    const cHeavy = sess({ id: "ch", parentID: "p", cost: 5 })
+    const gcA = sess({ id: "ga", parentID: "cl", cost: 2 })
+    const gcB = sess({ id: "gb", parentID: "cl", cost: 8 })
+    const nodes = buildTree([cHeavy, gcB, gcA, cLight, p])
+    expect(idsOf(sortNodes(nodes, { key: "own", dir: "asc" }))).toEqual(["p", "cl", "ga", "gb", "ch"])
+    expect(idsOf(sortNodes(nodes, { key: "own", dir: "desc" }))).toEqual(["p", "ch", "cl", "gb", "ga"])
+  })
+
+  it("returns new arrays and node objects and leaves the input tree alone", () => {
+    const nodes = threeRoots()
+    const sorted = sortNodes(nodes, { key: "incl", dir: "asc" })
+    expect(idsOf(sorted)).toEqual(["c", "b", "a", "ax"])
+    // The memoized tree keeps its base order and its identity.
+    expect(idsOf(nodes)).toEqual(["a", "ax", "b", "c"])
+    const sortedA = sorted.find((n) => n.session.id === "a")
+    const baseA = nodes.find((n) => n.session.id === "a")
+    expect(sorted).not.toBe(nodes)
+    expect(sortedA).not.toBe(baseA)
+    expect(sortedA?.children).not.toBe(baseA?.children)
+    expect(sortedA?.children[0]).not.toBe(baseA?.children[0])
+    // Session rows themselves are shared, not cloned.
+    expect(sortedA?.session).toBe(baseA?.session)
+  })
+
+  it("keeps the base order untouched in the default null state", () => {
+    const nodes = buildTree([sess({ id: "second" }), sess({ id: "first" })])
+    expect(sortNodes(nodes, null)).toBe(nodes)
+    expect(idsOf(sortNodes(nodes, null))).toEqual(["second", "first"])
+  })
+})
+
+describe("nextSortState", () => {
+  it("cycles default -> ascending -> descending -> default", () => {
+    const first = nextSortState(null, "own")
+    expect(first).toEqual({ key: "own", dir: "asc" })
+    const second = nextSortState(first, "own")
+    expect(second).toEqual({ key: "own", dir: "desc" })
+    expect(nextSortState(second, "own")).toBeNull()
+  })
+
+  it("starts a different column at ascending and replaces the previous one", () => {
+    expect(nextSortState({ key: "own", dir: "desc" }, "tokens")).toEqual({
+      key: "tokens",
+      dir: "asc",
+    })
+    expect(nextSortState(null, "incl")).toEqual({ key: "incl", dir: "asc" })
   })
 })

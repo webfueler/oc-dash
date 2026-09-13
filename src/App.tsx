@@ -25,7 +25,7 @@ import {
   THEME_CHOICES,
   type ThemeChoice,
 } from "./theme"
-import { allParentIds, buildTree } from "./tree"
+import { allParentIds, buildTree, nextSortState, sortNodes, type SortKey, type SortState } from "./tree"
 
 const POLL_MS = 30_000
 
@@ -50,6 +50,10 @@ export function App() {
   const [model, setModel] = useState<string>("")
   // P2: collapsed every load; a parent id lands here only once it is expanded.
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
+  // Mission 058: the Sessions column sort, one column at a time; `null` is
+  // the default (base input order). `changeRange` leaves it alone, so the
+  // choice survives range switches like the filters do.
+  const [sort, setSort] = useState<SortState | null>(null)
 
   // Mission 015 (PB): the stored theme choice. The pre-paint script in
   // index.html already applied it to <html> before first paint; React just
@@ -183,6 +187,9 @@ export function App() {
     [sessions, directory, model],
   )
   const tree = useMemo(() => buildTree(filteredRows), [filteredRows])
+  // Mission 058: the same post-filter tree, ordered while a column is
+  // active; `null` keeps the base order, so the page loads default.
+  const sortedTree = useMemo(() => sortNodes(tree, sort), [tree, sort])
 
   const toggleRow = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -199,6 +206,13 @@ export function App() {
 
   const collapseAll = useCallback(() => {
     setExpanded(new Set())
+  }, [])
+
+  // Mission 058: a header activation cycles its column default -> ascending
+  // -> descending -> default; picking another column starts there at
+  // ascending and drops the previous one.
+  const cycleSort = useCallback((key: SortKey) => {
+    setSort((prev) => nextSortState(prev, key))
   }, [])
 
   const treeHasParents = useMemo(() => allParentIds(tree).length > 0, [tree])
@@ -332,7 +346,14 @@ export function App() {
                 session list truncated at 50 pages — older sessions may be missing
               </p>
             )}
-            <SessionsTable nodes={tree} expanded={expanded} onToggle={toggleRow} names={modelNames} />
+            <SessionsTable
+              nodes={sortedTree}
+              expanded={expanded}
+              onToggle={toggleRow}
+              names={modelNames}
+              sort={sort}
+              onSort={cycleSort}
+            />
           </section>
 
           <section>

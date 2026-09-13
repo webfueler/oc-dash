@@ -423,6 +423,37 @@ th.num {
   font-variant-numeric: tabular-nums;
 }
 
+/* Mission 058: the sortable Sessions column headers. The button inherits the
+   th's uppercase dim type, carries the pointer and hover cue, and the arrow
+   marks the active direction. */
+th .sort-th {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+th .sort-th:hover {
+  color: var(--text);
+}
+
+th[aria-sort="ascending"] .sort-th,
+th[aria-sort="descending"] .sort-th {
+  color: var(--text);
+}
+
+.sort-arrow {
+  font-size: 10px;
+}
+
 /* P3: parent rows carry a panel tint and a semibold title */
 .root-row td {
   background: var(--panel2);
