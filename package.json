@@ -1,6 +1,6 @@
 {
   "name": "@webfueler/oc-dash",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Local dashboard for opencode2 session costs, token totals, and subagent spend",
   "license": "MIT",
   "type": "module",
