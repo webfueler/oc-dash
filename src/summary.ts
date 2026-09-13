@@ -123,8 +123,8 @@ export interface FallbackTotals {
 
 /**
  * Totals computed client-side from the raw session list, used when the
- * stats endpoint is unavailable (degraded mode). Per-row costs exclude
- * compaction usage, so these can be slightly lower than stats totals.
+ * stats endpoint is unavailable (degraded mode). Session rows include
+ * compaction usage; stats totals exclude it, so the two can differ.
  */
 export function fallbackTotals(sessions: SessionInfo[]): FallbackTotals {
   const totals: FallbackTotals = {

@@ -49,7 +49,7 @@ export function KpiHeader({
           {sub.length > 0 && <div className="hero-sub">{sub.join(" · ")}</div>}
           {kpis.source === "fallback" && (
             <div className="badge warn">
-              stats unavailable — totals computed from session rows (compaction usage not included)
+              stats unavailable — totals computed from session rows (includes compaction usage)
             </div>
           )}
         </div>

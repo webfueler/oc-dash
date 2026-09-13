@@ -369,8 +369,8 @@ export function App() {
           <footer className="footnotes">
             <ol>
               <li>
-                KPI totals come from the stats endpoint and include compaction usage not
-                attributed to any session, so they can exceed the sum of session rollups.
+                Stats totals exclude compaction usage; session rows include it, so KPI
+                totals can differ from the session rollups in the table.
               </li>
               <li>
                 Costs are list-price estimates (models.dev data) and undercount unpriced
