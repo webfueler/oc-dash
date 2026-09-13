@@ -106,6 +106,12 @@ export interface SessionsPayload {
   data: SessionInfo[]
 }
 
+/**
+ * Mission 044: providerID/id -> display name, from the server's /api/model
+ * lookup. Missing keys (or the whole map) mean the raw-id fallback labels.
+ */
+export type ModelNames = Record<string, string>
+
 export interface DashboardUpdate {
   version: string
   latest: string | null
@@ -149,6 +155,16 @@ export function fetchSummary(range: Range, project?: string): Promise<SummaryRes
 
 export function fetchSessions(range: Range): Promise<SessionsPayload> {
   return getJson(`/api/sessions?range=${range}`)
+}
+
+/**
+ * Mission 044: the display-name map. The route wraps it as `{ names: {...} }`
+ * and answers `{ names: {} }` on failure; an empty map is a valid payload,
+ * not an error — the label helpers fall back.
+ */
+export async function fetchModelNames(): Promise<ModelNames> {
+  const body = await getJson<{ names?: ModelNames }>("/api/model-names")
+  return body.names ?? {}
 }
 
 export function fetchHealth(): Promise<HealthResponse> {

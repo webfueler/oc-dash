@@ -1,4 +1,4 @@
-import type { ModelRef, SessionInfo } from "./api"
+import type { ModelNames, ModelRef, SessionInfo } from "./api"
 
 /**
  * Mission 013 (PA/PC): pure option derivation and filter composition for the
@@ -49,6 +49,22 @@ export function modelShortLabel(key: string): string {
 }
 
 /**
+ * Mission 044: the visible model label — the /api/model display name when
+ * the map has it, otherwise the existing short-form convention (raw id,
+ * provider dropped). The mapping never changes a key, a count, or a match.
+ */
+export function modelDisplayName(key: string, names?: ModelNames): string {
+  const name = names?.[key]
+  return name || modelShortLabel(key)
+}
+
+/** Hidden search text: the display name plus the base key, or the key alone. */
+function modelSearchText(key: string, names?: ModelNames): string {
+  const name = names?.[key]
+  return name ? `${name} ${key}` : key
+}
+
+/**
  * State value of the model filter. "" means no model filter; every real
  * option key is its base model ("providerID/id", variant-agnostic), which
  * always contains a "/", so this sentinel cannot collide.
@@ -57,7 +73,7 @@ export const NO_MODEL_KEY = "no-model"
 
 export interface ModelOption {
   key: string
-  /** Visible label; for real models the short id form (provider dropped). */
+  /** Visible label; for real models the display name when mapped, else the short id form. */
   label: string
   count: number
   /** The explicit dashed "no model" bucket for rows without a model. */
@@ -70,7 +86,7 @@ export interface ModelOption {
  * reachable instead of silently dropping out. Mission 019: variants of one
  * model collapse into a single bucket with summed counts.
  */
-export function modelOptions(rows: SessionInfo[]): ModelOption[] {
+export function modelOptions(rows: SessionInfo[], names?: ModelNames): ModelOption[] {
   const counts = new Map<string, number>()
   for (const s of rows) {
     const key = s.model ? modelBaseKey(s.model) : NO_MODEL_KEY
@@ -79,7 +95,7 @@ export function modelOptions(rows: SessionInfo[]): ModelOption[] {
   return [...counts.entries()]
     .map(([key, count]) => ({
       key,
-      label: key === NO_MODEL_KEY ? "no model" : modelShortLabel(key),
+      label: key === NO_MODEL_KEY ? "no model" : modelDisplayName(key, names),
       count,
       noModel: key === NO_MODEL_KEY,
     }))
@@ -132,17 +148,24 @@ export function projectComboOptions(rows: SessionInfo[], allCount: number): Comb
  * short-form convention), the full base "providerID/id" rides along as the
  * detail and the search text, so the provider prefix stays visible when open
  * and searchable when typed — the same visible-short/hidden-full split the
- * project options use.
+ * project options use. Mission 044: the label becomes the /api/model display
+ * name when the map has it; the key, the detail, and the filter semantics
+ * stay the base "providerID/id", and the name joins the search text so the
+ * visible label is also findable.
  */
-export function modelComboOptions(rows: SessionInfo[], allCount: number): ComboOption[] {
+export function modelComboOptions(
+  rows: SessionInfo[],
+  allCount: number,
+  names?: ModelNames,
+): ComboOption[] {
   return [
     allEntry(allCount),
-    ...modelOptions(rows).map((m) => ({
+    ...modelOptions(rows, names).map((m) => ({
       key: m.key,
       label: m.label,
       detail: m.noModel ? undefined : m.key,
       count: m.count,
-      searchText: m.noModel ? m.label : m.key,
+      searchText: m.noModel ? m.label : modelSearchText(m.key, names),
       chip: true,
       dashed: m.noModel,
     })),
@@ -183,15 +206,15 @@ export function staleProjectOption(path: string): ComboOption {
   }
 }
 
-/** The missing model option: the 019 short-form chip, count 0. */
-export function staleModelOption(key: string): ComboOption {
+/** The missing model option: the 019 short-form chip, count 0 (044: the display name when mapped). */
+export function staleModelOption(key: string, names?: ModelNames): ComboOption {
   const noModel = key === NO_MODEL_KEY
   return {
     key,
-    label: noModel ? "no model" : modelShortLabel(key),
+    label: noModel ? "no model" : modelDisplayName(key, names),
     detail: noModel ? undefined : key,
     count: 0,
-    searchText: noModel ? "no model" : key,
+    searchText: noModel ? "no model" : modelSearchText(key, names),
     chip: true,
     dashed: noModel,
   }

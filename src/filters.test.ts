@@ -6,6 +6,7 @@ import {
   directoryOptions,
   modelBaseKey,
   modelComboOptions,
+  modelDisplayName,
   modelOptions,
   modelShortLabel,
   projectComboOptions,
@@ -87,6 +88,26 @@ describe("modelBaseKey / modelShortLabel", () => {
   })
 })
 
+describe("modelDisplayName (mission 044: /api/model display names)", () => {
+  const names = { "opencode-go/glm-5.3-flash": "GLM 5.3 Flash" }
+
+  it("prefers the mapped display name", () => {
+    expect(modelDisplayName("opencode-go/glm-5.3-flash", names)).toBe("GLM 5.3 Flash")
+  })
+
+  it("falls back to the short id when the map has no entry", () => {
+    expect(modelDisplayName("github-copilot/gpt-5.6-luna", names)).toBe("gpt-5.6-luna")
+  })
+
+  it("falls back to the short id with no map at all", () => {
+    expect(modelDisplayName("opencode-go/glm-5.3-flash")).toBe("glm-5.3-flash")
+  })
+
+  it("never returns a blank label for an empty mapped name", () => {
+    expect(modelDisplayName("p/m", { "p/m": "" })).toBe("m")
+  })
+})
+
 describe("modelOptions", () => {
   it("groups rows by the base provider/id, summing the variants' counts", () => {
     const opts = modelOptions(rows())
@@ -110,6 +131,22 @@ describe("modelOptions", () => {
   it("labels real models with the short id form, provider dropped", () => {
     const glm = modelOptions(rows()).find((o) => o.key === "opencode-go/glm-5.3-flash")
     expect(glm?.label).toBe("glm-5.3-flash")
+  })
+
+  it("labels real models with the display name when the map has it (mission 044)", () => {
+    const opts = modelOptions(rows(), {
+      "opencode-go/glm-5.3-flash": "GLM 5.3 Flash",
+    })
+    expect(opts.find((o) => o.key === "opencode-go/glm-5.3-flash")?.label).toBe("GLM 5.3 Flash")
+    // Unmapped keys and the no-model bucket keep today's labels.
+    expect(opts.find((o) => o.key === "github-copilot/gpt-5.6-luna")?.label).toBe("gpt-5.6-luna")
+    expect(opts.find((o) => o.key === NO_MODEL_KEY)?.label).toBe("no model")
+  })
+
+  it("keeps the key and count untouched by the name map", () => {
+    const plain = modelOptions(rows())
+    const mapped = modelOptions(rows(), { "opencode-go/glm-5.3-flash": "GLM 5.3 Flash" })
+    expect(mapped.map((o) => [o.key, o.count])).toEqual(plain.map((o) => [o.key, o.count]))
   })
 
   it("buckets the no-model rows into one explicit dashed entry", () => {
@@ -186,6 +223,21 @@ describe("modelComboOptions", () => {
     expect(nm?.detail).toBeUndefined()
     expect(nm?.searchText).toBe("no model")
   })
+
+  it("shows the display name as the label with the base key kept as detail (mission 044)", () => {
+    const opts = modelComboOptions(rows(), 5, { "opencode-go/glm-5.3-flash": "GLM 5.3 Flash" })
+    const glm = opts.find((o) => o.key === "opencode-go/glm-5.3-flash")
+    expect(glm?.label).toBe("GLM 5.3 Flash")
+    expect(glm?.detail).toBe("opencode-go/glm-5.3-flash")
+    // The name joins the search text so the visible label is findable; the
+    // provider-prefixed base stays searchable too.
+    expect(glm?.searchText).toBe("GLM 5.3 Flash opencode-go/glm-5.3-flash")
+    expect(glm?.searchText.toLowerCase().includes("glm-5.3-flash")).toBe(true)
+    // Unmapped keys keep today's exact option shape.
+    const gpt = opts.find((o) => o.key === "github-copilot/gpt-5.6-luna")
+    expect(gpt?.label).toBe("gpt-5.6-luna")
+    expect(gpt?.searchText).toBe("github-copilot/gpt-5.6-luna")
+  })
 })
 
 describe("withStaleOption (mission 020: filters always visible)", () => {
@@ -224,6 +276,23 @@ describe("withStaleOption (mission 020: filters always visible)", () => {
       detail: "opencode-go/glm-5.3-flash",
       count: 0,
       searchText: "opencode-go/glm-5.3-flash",
+      chip: true,
+      dashed: false,
+    })
+  })
+
+  it("re-adds a held model value with the display name when mapped (mission 044)", () => {
+    const stale = withStaleOption(
+      modelComboOptions([], 0),
+      "opencode-go/glm-5.3-flash",
+      (key) => staleModelOption(key, { "opencode-go/glm-5.3-flash": "GLM 5.3 Flash" }),
+    )
+    expect(stale[1]).toEqual({
+      key: "opencode-go/glm-5.3-flash",
+      label: "GLM 5.3 Flash",
+      detail: "opencode-go/glm-5.3-flash",
+      count: 0,
+      searchText: "GLM 5.3 Flash opencode-go/glm-5.3-flash",
       chip: true,
       dashed: false,
     })

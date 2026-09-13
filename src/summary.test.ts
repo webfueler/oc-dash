@@ -435,6 +435,20 @@ describe("mission 014: filter card label", () => {
   it("is empty when no filter is set", () => {
     expect(filterCardLabel("", "")).toBe("")
   })
+
+  it("uses the display name when the map has it, the short id otherwise (mission 044)", () => {
+    expect(
+      filterCardLabel("/tmp/proj", "opencode-go/glm-5.3-flash", {
+        "opencode-go/glm-5.3-flash": "GLM 5.3 Flash",
+      }),
+    ).toBe("proj · GLM 5.3 Flash")
+    expect(
+      filterCardLabel("", "opencode-go/glm-5.3-flash", {
+        "github-copilot/gpt-5.6-luna": "GPT 5.6 Luna",
+      }),
+    ).toBe("glm-5.3-flash")
+    expect(filterCardLabel("", NO_MODEL_KEY, { "no-model": "bogus" })).toBe("no model")
+  })
 })
 
 describe("mission 014: card label range tracks the rows' payload", () => {

@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { DashboardUpdate, HealthResponse, Range, SessionsPayload, SummaryResponse } from "./api"
-import { fetchHealth, fetchSessions, fetchSummary } from "./api"
+import type {
+  DashboardUpdate,
+  HealthResponse,
+  ModelNames,
+  Range,
+  SessionsPayload,
+  SummaryResponse,
+} from "./api"
+import { fetchHealth, fetchModelNames, fetchSessions, fetchSummary } from "./api"
 import { ActivityChart } from "./components/ActivityChart"
 import { FilterCombobox } from "./components/FilterCombobox"
 import { FilterSummaryCard } from "./components/FilterSummaryCard"
@@ -26,6 +33,10 @@ export function App() {
   const [range, setRange] = useState<Range>("7d")
   const [summary, setSummary] = useState<SummaryResponse | null>(null)
   const [sessions, setSessions] = useState<SessionsPayload | null>(null)
+  // Mission 044: providerID/id -> display name for the model label surfaces.
+  // An empty map (or a failed fetch, which keeps the current value) means the
+  // raw-id fallback labels; the filter semantics never touch it.
+  const [modelNames, setModelNames] = useState<ModelNames>({})
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [sessionsError, setSessionsError] = useState<string | null>(null)
@@ -82,10 +93,11 @@ export function App() {
   }, [])
 
   const refresh = useCallback(async () => {
-    const [r1, r2, r3] = await Promise.allSettled([
+    const [r1, r2, r3, r4] = await Promise.allSettled([
       fetchSummary(range, cardProjectsParam || undefined),
       fetchSessions(range),
       fetchHealth(),
+      fetchModelNames(),
     ])
     if (r1.status === "fulfilled") {
       setSummary(r1.value)
@@ -105,6 +117,11 @@ export function App() {
         ok: true,
         service: { url: null, healthy: false, version: null, error: "dashboard backend unreachable" },
       })
+    // Mission 044: best-effort name map. A rejected fetch keeps the
+    // previously loaded map; the server's degraded 200 (`{ names: {} }`)
+    // arrives as an empty map and replaces it, so labels fall back to the
+    // raw ids until the next successful fetch. No error surface.
+    if (r4.status === "fulfilled") setModelNames(r4.value)
     setUpdatedAt(new Date())
     setLoaded(true)
   }, [range, cardProjectsParam])
@@ -148,11 +165,11 @@ export function App() {
   const modelFilterOptions = useMemo(
     () =>
       withStaleOption(
-        modelComboOptions(sessions?.data ?? [], sessions?.count ?? 0),
+        modelComboOptions(sessions?.data ?? [], sessions?.count ?? 0, modelNames),
         model,
-        staleModelOption,
+        (key) => staleModelOption(key, modelNames),
       ),
-    [sessions, model],
+    [sessions, model, modelNames],
   )
 
   // Mission 013 (PC) + 014 (PD): directory AND model compose in this memo,
@@ -286,6 +303,7 @@ export function App() {
               sessions={sessions}
               activeRange={range}
               projectIDs={cardProjectIDs}
+              names={modelNames}
             />
           )}
 
@@ -314,12 +332,12 @@ export function App() {
                 session list truncated at 50 pages — older sessions may be missing
               </p>
             )}
-            <SessionsTable nodes={tree} expanded={expanded} onToggle={toggleRow} />
+            <SessionsTable nodes={tree} expanded={expanded} onToggle={toggleRow} names={modelNames} />
           </section>
 
           <section>
             <h2>Models</h2>
-            <ModelsTable rows={models} />
+            <ModelsTable rows={models} names={modelNames} />
           </section>
 
           <section>

@@ -1,5 +1,6 @@
-import type { SessionInfo } from "../api"
+import type { ModelNames, SessionInfo } from "../api"
 import { fmtInt, fmtTokens, fmtUSD, outcomeView, relTime } from "../format"
+import { modelBaseKey, modelDisplayName } from "../filters"
 import type { SessionNode } from "../tree"
 
 /**
@@ -12,10 +13,13 @@ export function SessionsTable({
   nodes,
   expanded,
   onToggle,
+  names,
 }: {
   nodes: SessionNode[]
   expanded: ReadonlySet<string>
   onToggle: (id: string) => void
+  /** Mission 044: providerID/id -> display name; missing keys keep the raw id. */
+  names?: ModelNames
 }) {
   if (nodes.length === 0) return <p className="empty">No sessions in this range.</p>
   return (
@@ -32,7 +36,7 @@ export function SessionsTable({
           <th>Outcome</th>
         </tr>
       </thead>
-      <tbody>{nodes.flatMap((n) => rows(n, 0, expanded, onToggle))}</tbody>
+      <tbody>{nodes.flatMap((n) => rows(n, 0, expanded, onToggle, names))}</tbody>
     </table>
   )
 }
@@ -42,10 +46,11 @@ function rows(
   depth: number,
   expanded: ReadonlySet<string>,
   onToggle: (id: string) => void,
+  names?: ModelNames,
 ): React.ReactElement[] {
-  const out = [row(node, depth, expanded, onToggle)]
+  const out = [row(node, depth, expanded, onToggle, names)]
   if (expanded.has(node.session.id)) {
-    for (const child of node.children) out.push(...rows(child, depth + 1, expanded, onToggle))
+    for (const child of node.children) out.push(...rows(child, depth + 1, expanded, onToggle, names))
   }
   return out
 }
@@ -55,17 +60,21 @@ function row(
   depth: number,
   expanded: ReadonlySet<string>,
   onToggle: (id: string) => void,
+  names?: ModelNames,
 ): React.ReactElement {
   const s: SessionInfo = node.session
   const hasChildren = node.children.length > 0
   const isOpen = hasChildren && expanded.has(s.id)
   const indent = 34 + Math.max(0, depth - 1) * 18
   const model = s.model
+  // Mission 044: the visible chip is the /api/model display name (the raw id
+  // when the map has no entry — today's exact label); the hover title keeps
+  // the raw provider/id and variant reachable.
   const fullModel = model
     ? `${model.providerID}/${model.id}${model.variant ? ` · ${model.variant}` : ""}`
     : undefined
   const shortModel = model
-    ? `${model.id}${model.variant ? ` · ${model.variant}` : ""}`
+    ? `${modelDisplayName(modelBaseKey(model), names)}${model.variant ? ` · ${model.variant}` : ""}`
     : undefined
   const tokenTip = s.tokens
     ? `input ${fmtInt(s.tokens.input)} · output ${fmtInt(s.tokens.output)} · reasoning ${fmtInt(s.tokens.reasoning)} · cache read ${fmtInt(s.tokens.cache?.read)} · cache write ${fmtInt(s.tokens.cache?.write)}`

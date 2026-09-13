@@ -1,4 +1,5 @@
 import type {
+  ModelNames,
   ModelUsage,
   ProjectStats,
   Range,
@@ -8,7 +9,7 @@ import type {
   SummaryOk,
   SummaryResponse,
 } from "./api"
-import { NO_MODEL_KEY, applyFilters, modelBaseKey, modelShortLabel } from "./filters"
+import { NO_MODEL_KEY, applyFilters, modelBaseKey, modelDisplayName } from "./filters"
 import { isoDate } from "./format"
 import { tokenTotal } from "./tree"
 
@@ -239,12 +240,13 @@ export function projectIDForDirectory(rows: SessionInfo[], directory: string): s
  * model filter state is the base "providerID/id" since mission 019, and the
  * short-form convention drops the provider prefix; the artifact's card label
  * is not provider-prefixed), "no model" for the no-model bucket. Empty when
- * no filter is set.
+ * no filter is set. Mission 044: the model part becomes the /api/model
+ * display name when the map has it, the short id otherwise.
  */
-export function filterCardLabel(directory: string, model: string): string {
+export function filterCardLabel(directory: string, model: string, names?: ModelNames): string {
   const parts: string[] = []
   if (directory) parts.push(directory.split("/").pop() || directory)
-  if (model) parts.push(model === NO_MODEL_KEY ? "no model" : modelShortLabel(model))
+  if (model) parts.push(model === NO_MODEL_KEY ? "no model" : modelDisplayName(model, names))
   return parts.join(" · ")
 }
 

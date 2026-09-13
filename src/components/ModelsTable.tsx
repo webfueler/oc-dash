@@ -1,7 +1,8 @@
 import { fmtInt, fmtTokens, fmtUSD } from "../format"
 import type { ModelRow } from "../summary"
+import type { ModelNames } from "../api"
 
-export function ModelsTable({ rows }: { rows: ModelRow[] }) {
+export function ModelsTable({ rows, names }: { rows: ModelRow[]; names?: ModelNames }) {
   if (rows.length === 0) return <p className="empty">No model usage in this range.</p>
   return (
     <table className="models">
@@ -15,10 +16,17 @@ export function ModelsTable({ rows }: { rows: ModelRow[] }) {
       </thead>
       <tbody>
         {rows.map((m) => {
-          const name = `${m.providerID}/${m.id}${m.variant ? ` · ${m.variant}` : ""}`
+          const base = `${m.providerID}/${m.id}`
+          // Mission 044: the visible name is the /api/model display name when
+          // mapped, today's raw "providerID/id · variant" otherwise; the raw
+          // form stays reachable as the hover title and the row key.
+          const full = `${base}${m.variant ? ` · ${m.variant}` : ""}`
+          // Fallback is the full raw base, not the short form: HEAD rendered
+          // "providerID/id · variant" before mission 044.
+          const name = `${names?.[base] || base}${m.variant ? ` · ${m.variant}` : ""}`
           return (
-            <tr key={name}>
-              <td className="model" title={name}>
+            <tr key={full}>
+              <td className="model" title={full}>
                 {name}
                 {m.unpriced && (
                   <span className="badge warn unpriced" title="Tokens were spent but the provider reports no price data">

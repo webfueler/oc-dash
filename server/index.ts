@@ -4,6 +4,7 @@ import { Hono } from "hono"
 import { existsSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { errorMessage, getOpencode, ocGetJson, type OpencodeContext } from "./opencode.js"
+import { modelNames } from "./models.js"
 import { contextStatsRange, localTimezone, parseProjectParam, parseRangePreset, resolveRange } from "./ranges.js"
 import { compareVersions } from "./version.js"
 import { walkSessions, type RawPage } from "./walk.js"
@@ -247,6 +248,20 @@ app.get("/api/sessions", async (c) => {
     })
   } catch (err) {
     return c.json({ error: `opencode service request failed: ${errorMessage(err)}` }, 502)
+  }
+})
+
+// Mission 044: the providerID/id -> display-name map for the label surfaces
+// (session chips, model filter, card header, models table). A separate
+// lookup, not the stats path; the cache inside modelNames() keeps this at
+// one upstream fetch per TTL window. Never an error surface: the client
+// falls back to the raw ids when the map is empty.
+app.get("/api/model-names", async (c) => {
+  try {
+    const oc = await getOpencode()
+    return c.json({ names: await modelNames(oc) })
+  } catch {
+    return c.json({ names: {} })
   }
 })
 

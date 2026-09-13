@@ -1,4 +1,4 @@
-import type { Range, SessionInfo, SessionsPayload, SummaryResponse } from "../api"
+import type { ModelNames, Range, SessionInfo, SessionsPayload, SummaryResponse } from "../api"
 import { fmtInt, fmtTokens, fmtUSD } from "../format"
 import {
   cardMoney,
@@ -52,6 +52,7 @@ export function FilterSummaryCard({
   sessions,
   activeRange,
   projectIDs,
+  names,
 }: {
   /** The post-filter session rows (the same rows buildTree receives). */
   rows: SessionInfo[]
@@ -69,6 +70,8 @@ export function FilterSummaryCard({
    * id whose payload feeds the tier-2 tiles.
    */
   projectIDs: string[]
+  /** Mission 044: providerID/id -> display name for the card's model label. */
+  names?: ModelNames
 }) {
   // Tier 1 is the exact fallback pipeline the hero's degraded mode uses:
   // row sums for tokens, sessions, subagents, with the stats-only fields
@@ -113,7 +116,7 @@ export function FilterSummaryCard({
   // is pinned by tests — true of the number it accompanies on every path.
   sub.push(moneySubLine(money, model))
 
-  const label = filterCardLabel(directory, model)
+  const label = filterCardLabel(directory, model, names)
   return (
     <section className="fcard" aria-label="Filtered totals">
       <div className="hero-label">
