@@ -27,13 +27,17 @@ back to totals computed from the session list.
 
 ## Upstream connection
 
-The backend uses `@opencode/client`, pinned to an exact beta build, and is
-discover-only: `Service.discover()` finds a healthy registered service and
-never starts, stops, or restarts one. If nothing healthy is registered when
-the dashboard starts, it prints a short message (start
-`opencode serve --service`) and exits. If the service dies later, the UI
-shows its degraded state instead of crashing. Calls go through the typed
-client with a raw-fetch fallback using the service auth headers.
+The backend uses `@opencode/client`, pinned to an exact build matching the
+service line (2.0.6), and is discover-only: `Service.discover()` finds a
+healthy registered service and never starts, stops, or restarts one. If
+nothing healthy is registered when the dashboard starts, it prints a short
+message (start `opencode serve --service`) and exits. If the service dies
+later, the UI shows its degraded state instead of crashing. Calls go through
+the typed client with a raw-fetch fallback using the service auth headers.
+
+Discovery and the `/api/health` health surface both read the service's
+`GET /api/info` (`{ version, pid }`), the endpoint the 2.0.x line serves;
+the beta line's `/api/health` is gone there (404).
 
 The discovered endpoint is cached for the life of the dashboard process, so
 if the opencode service comes back on a different port, restart the

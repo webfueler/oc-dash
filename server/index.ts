@@ -126,8 +126,11 @@ app.get("/api/health", async (c) => {
   }
   try {
     const oc = await getOpencode()
-    const body = (await ocGetJson(oc, "/api/health")) as {
-      healthy?: boolean
+    // 2.0.6 service reports itself on GET /api/info ({ version, pid, urls });
+    // the beta line's /api/health is gone there (404), which is why both the
+    // client's discovery probe and this route ask /api/info. A 2xx answer
+    // from a discovered endpoint means the daemon is up.
+    const body = (await oc.client.server.info()) as {
       version?: string
     } | null
     return c.json({
@@ -135,7 +138,7 @@ app.get("/api/health", async (c) => {
       dashboard,
       service: {
         url: oc.endpoint.url,
-        healthy: body?.healthy === true,
+        healthy: true,
         version: body?.version ?? null,
       },
     })

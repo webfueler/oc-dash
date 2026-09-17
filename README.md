@@ -40,7 +40,7 @@ then the sessions table, the models table, and an activity chart.
 ## Quick start
 
 Requires Node 22+ with npm, and a running opencode2 service from the
-compatible beta line. oc-dash only issues read-only GETs and never starts,
+compatible 2.0.x line. oc-dash only issues read-only GETs and never starts,
 stops, or restarts the service.
 
 ```sh
@@ -53,11 +53,10 @@ for example `PORT=4022 npx @webfueler/oc-dash`.
 When no registered service answers the startup probe, oc-dash prints a short
 message and exits non-zero. Start the service with `opencode2 serve --service`.
 
-No opencode2 yet? Install the beta line with
-`npm install -g @opencode-ai/cli@beta`; it puts the `opencode2` command on
-your PATH. Exact money needs the stats route, which the beta line serves
-(`@latest` does not yet). To skip `npx`, `npm i -g @webfueler/oc-dash` puts
-`oc-dash` on your PATH.
+No opencode2 yet? Install it with `npm install -g @opencode/cli`; it puts
+the `opencode2` command on your PATH. Exact money needs the stats route,
+which the 2.0.x line serves. To skip `npx`, `npm i -g @webfueler/oc-dash`
+puts `oc-dash` on your PATH.
 
 ## Using the dashboard
 
@@ -88,7 +87,7 @@ the tab is visible, and right away when it becomes visible again.
 
 ## Known limits
 
-- The opencode2 API and client are beta; a service update can change
+- The opencode2 API and client move quickly; a service update can change
   behavior. Exact money needs a service that serves `session.stats`.
 - The session walk stops after 50 pages of 100 rows. When it truncates, the
   dashboard warns and a directory filter falls back to the approximate row sum.
@@ -113,7 +112,7 @@ npm run lint    # eslint
 ```
 
 The backend talks to the service through `@opencode/client`, pinned to an
-exact beta build, and is discover-only. See
+exact build matching the service line (2.0.6), and is discover-only. See
 [docs/API.md](https://github.com/webfueler/oc-dash/blob/main/docs/API.md) for
 the backend routes, the range mapping, and the project layout.
 
