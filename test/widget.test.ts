@@ -629,15 +629,19 @@ describe("widgetSessions", () => {
     // column for "$0.1523"
     // and cut "$1,234,567.89" to "$1,234,5…" at 340px. The column is
     // content-sized in CSS now; this pins the string the cell is handed,
-    // which is the half of the bug that lives in TypeScript.
-    for (const cost of [999.99, 1000, 12345.67, 123456.78, 1234567.89]) {
+    // which is the half of the bug that lives in TypeScript. Literal
+    // expectations, not a test-local formatter: a second implementation in
+    // the suite could drift with the first and still agree.
+    const cases: Array<[number, string]> = [
+      [999.99, "$999.99"],
+      [1000, "$1,000.00"],
+      [12345.67, "$12,345.67"],
+      [123456.78, "$123,456.78"],
+      [1234567.89, "$1,234,567.89"],
+    ]
+    for (const [cost, expected] of cases) {
       const view = widgetSessions(payload([sess({ id: "a", cost })]))
-      expect(view.rows[0].costText).toBe(new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(cost))
+      expect(view.rows[0].costText).toBe(expected)
       expect(view.rows[0].costText).not.toMatch(/…|\.\.\./)
     }
   })
