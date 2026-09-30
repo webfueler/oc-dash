@@ -1,0 +1,1079 @@
+/**
+ * The compact menu bar panel, built for a 340x420 viewport.
+ *
+ * Scoped, on purpose. The dashboard's src/styles.css is 767 lines with 107
+ * top-level selectors, most of them for controls this panel does not have
+ * (comboboxes, sort headers, the filtered card, the activity chart), and its
+ * body rule paints an opaque ground sized for a window. The dashboard's
+ * stylesheet is NOT imported and none of its selectors are reused; the only
+ * thing carried across is the token palette, copied verbatim, so the widget
+ * and the dashboard are one product in two sizes.
+ *
+ * Sizes here are panel sizes. The vertical budget was measured in a real
+ * 340x420 viewport with both tables at their full row budget, both header
+ * cells carrying their "+N more", and the taller of the panel's two note lines
+ * on screen. Money is never cut: the numeric columns are sized by what they
+ * print, so a cost grows with the figure and the label column takes what is
+ * left and ellipsizes. fmtMoney has no widest value to size against either,
+ * since it is always exactly two decimals, so a fixed pixel width can only
+ * ever be a cap. A truncated project name is honest; a truncated dollar figure
+ * is not.
+ *
+ * ---------------------------------------------------------------------------
+ * The vibrancy ground, and what it cost to keep the panel legible
+ * ---------------------------------------------------------------------------
+ *
+ * Option A, hand-rolled, no library. Four package names that look right
+ * (`macos-web`, `macos-ui`, `mac-css`, `macos-css`) are 404 on npm, the
+ * popular Liquid Glass kits either disable themselves on WebKit or ship
+ * 4.45MB of WebGL, and the control geometry that actually makes a control
+ * look macOS is about twenty lines of CSS each. So: `backdrop-filter` plus
+ * tokens plus hand-built geometry, zero kilobytes.
+ *
+ * THE TRANSPARENCY IS NOT FULL, and that is a decision made from measurement
+ * rather than taste. Option A was measured over the desktop it drew itself and
+ * got 4.84:1 light and 5.70:1 dark, then the same 9.5px grey was measured against
+ * every grey from black to white and got **1.02:1** at mid grey. The tint below
+ * is therefore opaque enough to bound the ground under every text leaf: over
+ * white, over black and over a photographic backdrop, the worst leaf in the
+ * panel still measures at or above 4.5:1, confirmed leaf by leaf against the
+ * real painted pixels rather than against a token.
+ *
+ * `--glass` is what does the bounding, and the alpha in it is the tuned number.
+ *
+ * ---------------------------------------------------------------------------
+ * The alpha, and why it is 0.84 and not the 0.70 that was asked for
+ * ---------------------------------------------------------------------------
+ *
+ * The ask was to bring the glass down to roughly 0.70 and re-run the sweep,
+ * moving the alpha back up and reporting by how much if anything fell under
+ * 4.5:1. It fell under, badly, and 0.84 is the measured floor. The ladder, worst
+ * leaf in the panel over the four backdrops, all four ranges, 16 states a step:
+ *
+ *   alpha   light worst   dark worst
+ *   0.70      3.34:1        2.94:1     <- 8/16 and 4/16 states under the floor
+ *   0.78      4.03:1        3.89:1
+ *   0.82      4.42:1        4.34:1
+ *   0.84      4.59:1        4.70:1     <- shipped; 0 of 32 under
+ *   0.86      4.82:1        5.01:1
+ *   0.88      4.98:1        5.33:1
+ *
+ * 0.70 is not a tuning problem, it is a different panel, and the reason is
+ * arithmetic rather than taste. At 0.70 the tint no longer bounds the ground,
+ * so each scheme is left holding exactly one adversarial case: dark mode's is a
+ * white desktop seen through 30 percent of near-black, a mid grey at relative
+ * luminance 0.116; light mode's is a black desktop seen through 30 percent of
+ * near-white, a mid grey at 0.479. Every ink then has to clear 4.5:1 against a
+ * ground the tint can no longer exclude, and that fixes a hard bound on ink
+ * LUMINANCE. Measured off the real painted grounds:
+ *
+ *   dark:  every light ink needs L >= 0.698, which is rgb(218,218,218).
+ *          `--dim` is 0.438, `--warn` 0.485, `--money` 0.617. All three fail,
+ *          and `--text` is already 0.839.
+ *   light: every dark ink needs L <= 0.068, which is rgb(73,73,73).
+ *          `--dim` is 0.105, `--money` 0.109, `--warn` 0.127. All three fail,
+ *          and `--text` is already 0.016.
+ *
+ * So 0.70 is reachable, and it costs the panel its dim tier in both schemes:
+ * three of the four ink tokens have to be re-pinned into a narrow luminance
+ * band right next to the primary ink (0.698 to 0.839 dark, 0.016 to 0.068
+ * light), which is the one job `--dim` exists for. The
+ * green money and the amber warn survive only as faint tints of near-white or
+ * near-black. That trade was not taken, and the ladder above is the table
+ * that decision needs.
+ *
+ * BOTH schemes now carry the same 0.84, where the earlier tuning carried 0.86
+ * and 0.88. The
+ * asymmetry is gone because it was a workaround: it existed to buy the light
+ * scheme's 27px hero enough ground, and at a common alpha the light hero is the
+ * binding leaf in both schemes anyway. What this costs in margin, stated rather
+ * than buried: the earlier light scheme cleared the floor by 0.48 and this
+ * clears it by 0.09, which is thin. The dark scheme's tightest leaf is the
+ * 8.5px table head over a light backdrop at 4.70:1, up from 5.01:1.
+ *
+ * The binding leaf in each scheme is worth naming, because they are different
+ * and only one of them is small type. Light's is `.w-hero-num`, the 27px figure,
+ * over a dark backdrop: a large number on a large ground, which is the best
+ * possible place for a panel's tightest margin. Dark's is `th`/`th.num`, the
+ * 8.5px table heads, over a light backdrop, which is the exposure to watch if
+ * anyone raises the transparency again.
+ *
+ * ---------------------------------------------------------------------------
+ *
+ * The comment that used to sit above `html, body { background: var(--bg) }`
+ * named `drawsBackground`, which is the undocumented WKWebView KVC key this
+ * project deliberately does not use (`AppDelegate.swift:58-60`). There were
+ * also two opaque declarations, not one. Both are gone and this is what
+ * replaced the wrong explanation.
+ *
+ * What still needs the shell: an `NSGlassEffectView`
+ * (macOS 26+) or `NSVisualEffectView` behind the webview inside `container`, and
+ * `popover.contentViewController?.view.window` made non-opaque. The old
+ * explanation here was that `backdrop-filter` needs pixels behind the element
+ * "in the page's backdrop root" and that a transparent page has none, which
+ * reads as though the native material would supply them once the window is
+ * non-opaque. It would not, and that distinction is the point:
+ * a page's backdrop root is the page's own content, and a native NSView behind
+ * a WKWebView is not part of it. So `backdrop-filter` below is very probably
+ * inert in the real widget and the panel's real translucency is the
+ * `--glass` alpha over the native material. Two consequences, one for the
+ * next visual check and one for this file: the page's alpha is necessary but
+ * not sufficient, because an opaque popover window puts AppKit's own ground
+ * behind the 16 percent that shows through and the number stops mattering; and
+ * 0.70 becomes genuinely viable only once the shell fix lands, because the
+ * native material adapts to the desktop in a way this sweep has to assume the
+ * worst about.
+ *
+ * The row geometry carries one bug worth naming: rows were `align-items: baseline`, which sizes each cell to its own
+ * content and parks the group at the top of the row. The share bar is a
+ * background tint on the `.w-share` cell, so the cell's height WAS the bar's
+ * height, and it was one line of text tall. `vertical-align: middle` on the
+ * cells plus `align-items: center` on the label's tracks is the fix, and the
+ * row does not grow for it.
+ *
+ * ---------------------------------------------------------------------------
+ * The offline row, and why the control recipe was not copied
+ * ---------------------------------------------------------------------------
+ *
+ * The panel's first state that asks the SHELL for something. Two buttons appear
+ * only while the dashboard does not answer, and one of them emits a second URL
+ * for the oc-dashbar menu bar app to match; the reasoning is in
+ * `WIDGET_START_URL` and `widgetOfflineActions` in src/widget.ts, and the geometry
+ * notes are on `.w-actions` at the bottom of this file.
+ *
+ * Two properties of this change are worth stating here rather than at the rule:
+ * no type size moved, and the `:has()` gate did not move. The offline state is
+ * 240.84px short of 420 with the controls in it, so nothing was reclaimed from
+ * anything, and the gate only ever matched `section > p.w-note.warn`, which the
+ * truncated payload and not this one renders.
+ */
+
+:root {
+  color-scheme: dark light;
+  /* The tinted ground under the material, and the only thing between the text
+     and the desktop: nothing above `.widget` paints a ground, and the alpha
+     ladder puts 0.84 at the floor for 4.5:1 in both schemes. See the block
+     above for the ladder and for what 0.70 would have cost. */
+  --glass: rgba(13, 17, 23, 0.84);
+  --glass-line: rgba(255, 255, 255, 0.2);
+  --row: rgba(255, 255, 255, 0.06);
+  --seg: rgba(255, 255, 255, 0.08);
+  --seg-on: rgba(255, 255, 255, 0.94);
+  --seg-on-ink: #0b0b0d;
+  --text: #e6edf3;
+  --dim: #a8b2bd;
+  --accent: #4493f8;
+  --ok: #3fb950;
+  --warn: #e0b341;
+  --bad: #f85149;
+  --money: #7ee2a8;
+}
+
+/* The widget follows the OS and nothing else: no toggle, so no [data-theme]
+   block and no attribute to set. widget.html drops the pre-paint script the
+   dashboard uses, and nothing here reads the dashboard's stored theme out of
+   localStorage. The one value this panel does persist is the selected range
+   (src/widget.ts's WIDGET_RANGE_KEY), under a key of its own. */
+@media (prefers-color-scheme: light) {
+  :root {
+    /* Light mode's worst backdrop is a black one and dark mode's is a white
+       one, and at the earlier 0.88 and 0.86 they needed opposite amounts of tint
+       to be bounded by the same ink. A common 0.84 was measured and both clear
+       4.5:1 there, so the asymmetry is gone; the binding leaf is this scheme's
+       27px hero over a dark backdrop at 4.59:1. */
+    --glass: rgba(250, 251, 253, 0.84);
+    --glass-line: rgba(0, 0, 0, 0.13);
+    --row: rgba(255, 255, 255, 0.5);
+    --seg: rgba(0, 0, 0, 0.055);
+    --seg-on: rgba(255, 255, 255, 0.98);
+    --seg-on-ink: #1d1d1f;
+    --text: #1f2328;
+    /* Darker than the dashboard's #656d76, and darker than dark mode's #a8b2bd
+       relative to its own ground, because on a translucent surface the dim
+       text's job is to be the SECOND most legible thing rather than the least.
+       Refusing 0.70 kept this token's job: at 0.70 this value
+       fails 4.5:1 and would have had to fall to L <= 0.068, rgb(73,73,73) or
+       so, which is the dim tier the design asks for. At 0.84 it is not the
+       binding leaf in this scheme — the 27px hero is, at 4.59:1. */
+    --dim: #545c66;
+    --accent: #0969da;
+    --ok: #1a7f37;
+    /* #7f5300, from #8a5a00: the contrast fix, and it is 8% darker on
+       every channel, which is a 0.1 degree hue drift and no saturation drift at
+       all, so this is the same amber rather than a different colour.
+
+       WHY IT MOVED, and why earlier sweeps did not notice. The first sweep
+       reported
+       "0 of 32 under 4.5:1" and that was true of every leaf it swept, but
+       `--warn` was never one of them: the two elements that wear it, the
+       truncated-list note and the hero's degraded line, only render when the
+       server's 50-page walk cap is hit or the stats payload is degraded, and no
+       sweep before this one rendered either payload. The full sweep measured all
+       2,944 leaves
+       and found the light scheme's `--warn` at 4.11:1 over a dark backdrop and
+       4.18:1 over the photographic one, on both notes. Verified pre-existing,
+       not a regression from this change: reverting both of the change's own
+       edits leaves the same
+       leaves at the same 4.11:1.
+
+       The worst light-scheme ground is rgb(214,215,216), the tint over a dark
+       backdrop, at luminance 0.6785. 4.5:1 against it needs ink luminance at or
+       below 0.1119 and the shipped value was 0.1272, over by 0.0153. This value
+       is 0.1070.
+
+       Measured after the change on the real painted pixels rather than on the
+       token: worst leaf 4.64:1, 0 of 2,944 leaves under the floor, and the
+       light scheme's binding leaf moves off this note entirely and onto the
+       27px hero, which is where the ladder said it belonged. Dark scheme's
+       `--warn`
+       measures 6.18:1 worst and is untouched. */
+    --warn: #7f5300;
+    --bad: #cf222e;
+    --money: #0f6b33;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* `height: 100%` on the chain, and it is load-bearing rather than
+   tidy. The popover hosts the webview at `Config.panelSize`, 340x420, and
+   `.widget` below asks for `min-height: 100%`. A percentage height resolves
+   against the parent's HEIGHT, and every one of these three was `auto`, so
+   `min-height: 100%` was resolving against an indefinite height and falling
+   back to `0`. `.widget` was therefore exactly its content height: 240.66 px at
+   `today`, which is the reported "the html does not take the full height" and
+   the 180 px of dead space under the panel. Anchoring the chain here is the
+   whole of the fix; nothing below `.widget` needed to change. */
+html,
+body {
+  margin: 0;
+  height: 100%;
+  /* No ground here, and that is the point. The page's own opaque background
+     was what hid the native material: two declarations, `html, body` and
+     `.widget`, and dropping only one of them leaves a rectangle of flat
+     colour sitting on top of the blur. With both gone, what shows through is
+     whatever the popover's own NSGlassEffectView draws, and the ground that
+     bounds the text is `--glass` on `.widget` below. The shell's job is to
+     make the webview and the popover window non-opaque so there is something
+     behind the page at all. */
+  background: transparent;
+  color: var(--text);
+  font: 11px/1.35 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The widget's mount point, which had no rule at all and so contributed the
+   middle link of the broken percentage chain above. `height: 100%` is the only
+   declaration; `#root` is this entry's own div (widget.html) and the dashboard
+   has its own `#root` in its own stylesheet, which is never loaded here. */
+#root {
+  height: 100%;
+}
+
+/* The panel IS the material. One element carries it, so there is exactly one
+   backdrop-filter in the document and nothing between the desktop and the
+   text except this block's own layers.
+
+   This element's `border-radius` and its inset rim are gone, and
+   that is the "one continuous surface" rule made in CSS rather than asserted
+   in a report. It was painting a rounded CARD inside the popover: a 10 px
+   radius against the shell's `Config.panelCornerRadius` of 8.0, so the two
+   curves never agreed, and a specular ring drawn 0.5 px inside its own edge.
+   That ring is the "two surfaces" that were reported, and it is why the content
+   looked like it stopped partway down: the card ended, and the popover's own
+   surface carried on below it.
+
+   Both now belong to AppKit. The popover window is the outermost clip either
+   way — opaque or non-opaque, AppKit rounds it — so the popover's own curve is
+   what the reader sees at the corners regardless, and the page has no business
+   drawing a second one inside it. The native `NSGlassEffectView` supplies the
+   rim that `box-shadow` used to fake, and it is a real one rather than a
+   hairline in the wrong coordinate space.
+
+   `min-height: 100%` now resolves, because `html`, `body` and `#root` above
+   all have a definite height. The ground reaches the webview's bottom edge and
+   both side edges at every range and in both schemes, and the content is laid
+   on top of it from the top. Where the content is short, as it is at `today`,
+   the remainder is glass and not a hole: that is the intended reading, and it
+   is the difference between one object and a card in a panel. */
+.widget {
+  width: 100%;
+  min-height: 100%;
+  /* Bottom padding 6px, from 10px: one of the four reclaims, and the
+     one that measures worst. A 340x420 popover's bottom edge is a rounded
+     window corner, and 10px of air under an 9px footnote there is air against
+     AppKit's curve rather than against content. The ground still reaches the
+     webview's bottom edge, which is the one-surface property and is a
+     function of `min-height`, not of this value. */
+  padding: 8px 10px 6px;
+  background: var(--glass);
+  /* The prefix first: Safari 9 through 17 spell it `-webkit-`, and the panel
+     runs in a WKWebView where the unprefixed spelling is only guaranteed from
+     Safari 18. Both declarations, prefixed first, so the older engine takes
+     the one it knows.
+
+     This is measured rather than preferred: in the real
+     widget this declaration is very probably inert. `backdrop-filter` samples
+     its BACKDROP ROOT, which is the page's own content, and the native view
+     hierarchy behind a WKWebView is not part of the page's backdrop root. With
+     a transparent page there is nothing behind `.widget` to sample, so the blur
+     and the saturation do nothing and what the reader sees is the flat `--glass`
+     tint over the native material. It is kept because it is correct for any
+     page that does paint a ground of its own, and because it is the difference
+     between the sweep's ground and the real one; it is not what makes the
+     panel translucent in the real widget. The alpha is. */
+  -webkit-backdrop-filter: blur(26px) saturate(168%);
+  backdrop-filter: blur(26px) saturate(168%);
+}
+
+.dim {
+  color: var(--dim);
+}
+
+/* --- the range selector -------------------------------------------------- */
+
+/* A macOS segmented control: a 22px rounded rect, an inset cap on the selected
+   segment, 0.5px hairline dividers between the rest. Not a tab strip (the
+   segments share one well, so there is no rule under them) and not a menu (all
+   four ranges are visible at once). 22px plus 6px of
+   margin is the 28px it costs the panel's budget, and it is the single largest
+   addition the range selector made.
+   `aria-pressed` on each button rather than a radio group, because the
+   constraint is that all four are visible at once and a radio group
+   wants arrow-key semantics this panel has no room to teach. */
+.w-range {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  height: 22px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  background: var(--seg);
+  box-shadow: inset 0 0 0 0.5px var(--glass-line);
+  overflow: hidden;
+}
+
+.w-seg {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0 2px;
+  border: 0;
+  min-width: 0;
+  background: transparent;
+  /* Full-strength ink on every segment, selected or not. An early draft dimmed
+     the unselected labels to 0.82 opacity and that put three of them under
+     4.5:1 over a light backdrop; macOS does not dim them either, it puts a
+     cap under the selected one and leaves the ink alone. */
+  color: var(--text);
+  /* Longhands, and the same trap `.w-quit` walked into and measured its way out
+     of. A CSS-wide keyword is only legal as a shorthand's WHOLE value, so
+     `inherit` in the family slot makes the entire declaration invalid and the
+     engine drops it rather than parsing the parts it recognises.
+
+     The failure was invisible, which is the reason this comment is here.
+     Measured at 340x420 in both schemes and at all four ranges, this rule
+     computed to the UA's `400 13.3333px Arial` on every segment: the intended
+     10.5px panel type was never applied, and the control rendered in the
+     fallback face at 27% larger than asked. Its neighbour `.w-title` measured
+     `600 10px ui-sans-serif` at the same moment, so the two numbers together
+     are the proof and either one alone would have read as plausible.
+
+     The shorthand was written here, the same trap was caught on `.w-quit`
+     and left alone here at the time, and this control was fixed in a later
+     pass. The
+     shape of the control did not change: same 10.5px, same 500, same 1 line
+     height, same inherited family. Only the declaration form did. */
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  /* The divider is on the button rather than on the well, so it stops one
+     segment short of the right edge and the well's own hairline carries that
+     side. */
+  box-shadow: inset -0.5px 0 0 var(--glass-line);
+}
+
+.w-seg:last-child {
+  box-shadow: none;
+}
+
+.w-seg:hover:not(.is-on) {
+  background: var(--row);
+}
+
+/* The cap. An inset highlight rather than a flat fill, and a 1px drop so it
+   sits above the well instead of being a hole in it. */
+.w-seg.is-on {
+  background: var(--seg-on);
+  color: var(--seg-on-ink);
+  font-weight: 600;
+  box-shadow:
+    inset -0.5px 0 0 var(--glass-line),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.7),
+    0 1px 2px rgba(0, 0, 0, 0.22);
+}
+
+.w-seg:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* --- top bar ------------------------------------------------------------- */
+
+.w-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  /* 4px, from 6px: the fourth reclaim. The header is one label now
+     that the timestamp moved to the footer, and 6px of air under a single word
+     was sized for the two-column strip it replaced. */
+  margin-bottom: 4px;
+}
+
+.w-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* `.w-updated` moved out of here and down to the quit row, so this
+   header is now one label. `justify-content: space-between` is kept rather than
+   simplified away: it is what the rule already said, it has no effect on a
+   single child, and rewriting it would be a change with no reader. */
+
+/* --- hero: the number the panel exists to show, and the strip beside it ---- */
+
+/* No card. The hero's background was `--panel` at full opacity, which on a
+   vibrancy panel is a flat opaque rectangle sitting on the material and
+   reading as a hole in it. The number and the strip sit straight on the glass
+   instead, which is what every other surface in this file now does. */
+.w-hero {
+  margin-bottom: 5px;
+}
+
+/* Annotation 2: the stat strip is to the RIGHT of the cost number, on the same
+   row. It is inside `.w-hero-value` because that is what makes the row, and
+   `w-hero-num` is the span that holds the figure so the strip can push right
+   with `margin-left: auto`. The value is a span inside it rather than the
+   block itself so the dash case and the strip share one flex row and cannot
+   drift apart in height. */
+.w-hero-value {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.w-hero-num {
+  font-size: 27px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--money);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+/* The dash case, spelled out rather than leaning on `.dim`: both selectors are
+   one class, so source order would otherwise let the money colour win and a
+   missing value would render as a green rule. */
+.w-hero-num.dim {
+  color: var(--dim);
+}
+
+.w-stats {
+  margin-left: auto;
+  min-width: 0;
+  text-align: right;
+  font-size: 9.5px;
+  line-height: 1.34;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One clause per line. A single 298px line was measured in a 320px box, which
+   cannot widen with the figures; three lines of two words each can. The
+   ellipsis is the safety net, not the mechanism. */
+.w-stat {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.w-stats b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.w-note {
+  font-size: 9.5px;
+  line-height: 1.3;
+  margin: 3px 0 0;
+}
+
+/* --- the truncated-list warning, and the only panel state that
+   did not fit ----------------------------------------------------------- */
+
+/*
+ * The warning is `list truncated — older sessions may be missing`, and it is
+ * the one state where the panel ran past 420. It measured 426.69 needed
+ * against 420, having already been found 1.69px over before the footer
+ * existed, and was left there because the fix was a design call.
+ *
+ * THE FIRST PREFERENCE IS MEASURED AT ZERO, and that is the reason the
+ * fix is whitespace. Shortening the wording buys nothing: the note is one line
+ * at 215.63px inside a 320px box, so there is no second line for a shorter
+ * sentence to remove. Measured, not assumed. Shortening the note's LINE HEIGHT
+ * would buy about 1.4px and
+ * this file makes a point of no type size moving, so that is not taken either.
+ *
+ * NO ROW WAS REMOVED. A row is data and a word is not; the reclaims below are
+ * all air.
+ *
+ * Everything here is GATED on the warning being present, which is the part that
+ * matters. The ordinary panel sits at 411.34 of 420 with 8.66px of slack and
+ * its look is settled, so an ungated reclaim would spend margin
+ * the reader can see on the state they actually look at, every time, to buy space
+ * for a state that only appears when the server's 50-page walk cap is hit. With
+ * the gate, the ordinary panel is unchanged to the pixel and only the state that
+ * overflowed tightens up.
+ *
+ * `:has()` is Safari 15.4+, so the panel's own WKWebView has it, and if some
+ * future engine did not, these six rules simply do not apply and the state
+ * degrades to today's overflow rather than to anything new. The gate selector
+ * is `section > p.w-note.warn` and not `.w-note.warn`: the hero's degraded line
+ * is a `<div className="w-note warn">` and the truncation flag is a `<p>`, so the
+ * element name separates them with no class added to the component and no edit
+ * outside this file.
+ *
+ * What each one is worth, measured one at a time at 340x420 rather than
+ * argued. The first draft of this comment claimed 10px and predicted 415.69;
+ * the panel says 9px and 417.69, and the panel is right, so the numbers here
+ * are the measured ones:
+ *
+ *   .widget padding-top     8 -> 6      2px   air against the popover's top curve
+ *   .widget padding-bottom  6 -> 4      2px   more of the same, and an earlier
+ *                                              pass already
+ *                                              took this one from 10 to 6
+ *   section margin-bottom   5 -> 4      2px   two gaps, hero->sessions and
+ *                                              sessions->models, 1px each
+ *   .w-top margin-bottom    4 -> 3      1px   under a header that is one word now
+ *   truncation note margin  3 -> 1      2px   the note's own air above itself
+ *
+ * Nine px reclaimed, 426.69 -> 417.69, so the one state that had 6.69px too
+ * much now has 2.31px of room. Both schemes, all four ranges, no v-overflow, and
+ * the ordinary panel is still 411.34 with its own 8.66px untouched because the
+ * gate does not match without the note.
+ *
+ * 2.31px is thin and it is worth saying why it is enough. Every height in the
+ * panel is a declared length rather than a content-driven one: the rows are
+ * `height: 26px` and `20px`, the selector is `height: 22px`, the button is
+ * `height: 18px`, and every line box in the note, the footnote and the stat
+ * strip carries an explicit `line-height`. So the layout does not depend on font
+ * metrics at all. The one thing that COULD cost another 12.35px is the note
+ * wrapping to a second line, and it has 104px of horizontal room to grow into
+ * (215.63px of text in a 320px box), so the risk is not a metric difference but
+ * a rewrite of the sentence, which is a decision rather than an accident.
+ */
+.widget:has(> section > p.w-note.warn) {
+  padding: 6px 10px 4px;
+}
+
+.widget:has(> section > p.w-note.warn) > .w-top {
+  margin-bottom: 3px;
+}
+
+.widget:has(> section > p.w-note.warn) > section:not(:last-of-type),
+.widget:has(> section > p.w-note.warn) > .w-hero {
+  margin-bottom: 4px;
+}
+
+.widget:has(> section > p.w-note.warn) > section > p.w-note.warn {
+  margin-top: 1px;
+}
+
+.warn {
+  color: var(--warn);
+}
+
+/* --- sections and tables ------------------------------------------------- */
+
+/* 5px between the hero and the sessions table, and NONE under the Models
+   table. That is one of the three reclaims and it is the cleanest of
+   them: the Models table is the last thing above the footnote, and the footnote
+   draws a hairline of its own, so the old 7px was air above a rule, not a gap
+   between two things. `:last-of-type` rather than a class because all three
+   sections are plain `<section>` and the hero is not one of them.
+   `.w-hero`'s own `margin-bottom` is separate and also 5px: the `.w-hero` rule
+   is later in this file and wins on order at equal specificity. */
+.widget section {
+  margin-bottom: 5px;
+}
+
+.widget section:last-of-type {
+  margin-bottom: 0;
+}
+
+/* The two section heads are gone (annotations 4 and 5). The row-cut count
+   moved into the table's own header line, where it costs no height, and the
+   window, the basis and the share denominator moved into that line's title.
+   `.w-cut` is the count, and it is `--text` rather than `--dim` because it is
+   a disclosure and the disclosure is what the reader is looking for. */
+.w-cut {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.w-table {
+  width: 100%;
+  border-collapse: collapse;
+  /* auto, not fixed: a numeric cell is as wide as the value it prints, and
+     the label column absorbs the rest. A fixed layout would have to name a
+     width for the money, and any name it picked would be a cap that a big
+     enough figure walks past. */
+  table-layout: auto;
+  background: var(--row);
+  border-radius: 7px;
+  overflow: hidden;
+  /* The grouped-table hairline: an inset ring rather than a `border`, so the
+     radius follows it. */
+  box-shadow: inset 0 0 0 0.5px var(--glass-line);
+}
+
+/* 26px body rows and 20px header rows, from 19 and 14 (annotation 3). No type
+   was shrunk to pay for it: every size in this file is the size the artifact
+   specified.
+
+   `vertical-align: middle` is the fix for the share bar, expressed for the
+   element that actually exists. In a grid row `baseline` was the bug, because
+   it sized each cell to its own content; in a table cell the height is already
+   the row's, so the equivalent is to centre the content inside it and the bar
+   (a background on the cell) then covers the whole row. Every cell measured
+   at 25.00px against a 26px row's 25px content box and 19.00px against a
+   20px header's, with a centre offset of 0.00px, after the same change. */
+.w-table th,
+.w-table td {
+  text-align: left;
+  padding: 0 6px;
+  height: 26px;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.w-table th {
+  height: 20px;
+  font-size: 8.5px;
+  font-weight: 600;
+  color: var(--dim);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--glass-line);
+}
+
+.w-table td {
+  border-top: 1px solid var(--glass-line);
+  font-variant-numeric: tabular-nums;
+}
+
+.w-table thead tr th + th,
+.w-table tbody tr td + td {
+  border-left: 1px solid var(--glass-line);
+}
+
+/* The numeric columns, in both tables.
+   `min-width` is the floor a column starts at, not its size: 66px holds
+   $999.99 and 56px holds "100.0%", so an ordinary day lays out exactly as it
+   did before, and a bigger figure widens the column instead of being cut.
+   `width: 1px` is the preferred width, and it is 1px on purpose: it asks the
+   auto layout for no slack here, so the used width lands on the column's
+   minimum, which is the value's own text. Without it the leftover space is
+   shared out and the money column grows past what it prints.
+   `overflow: visible` is what makes the "never cut" half true — a cell that
+   may scroll or ellipsize is a cell the layout may squeeze, so these rules
+   come after the shared `overflow: hidden` above and win.
+   The label column has no width of its own and takes the remainder. */
+.w-table th:nth-child(2),
+.w-table td:nth-child(2) {
+  width: 1px;
+  min-width: 66px;
+  overflow: visible;
+  text-overflow: clip;
+  text-align: right;
+  color: var(--money);
+}
+
+.w-table th:nth-child(3),
+.w-table td:nth-child(3) {
+  width: 1px;
+  min-width: 56px;
+  overflow: visible;
+  text-overflow: clip;
+  text-align: right;
+  color: var(--dim);
+}
+
+.w-table th:nth-child(2),
+.w-table th:nth-child(3) {
+  color: var(--dim);
+  font-weight: 600;
+}
+
+/* One line, two fields. The identity never yields its width to the secondary
+   text beside it; the secondary text ellipsizes instead. A grid with
+   minmax(0, …) tracks rather than a flex row, and the reason is the table
+   above: a nowrap flex row's min-content width is the sum of its children's
+   text, so under the auto layout this column would be sized by the longest
+   session title the machine has ever held and the panel would run past 340px.
+   A minmax(0, …) track can shrink to nothing, so the column takes what the
+   money columns leave and the labels ellipsize inside it.
+   `align-items: center` rather than `baseline`: the row is 26px and two tracks
+   of 11px and 9px type need centring in it, which is what the design
+   calls for. */
+.w-label {
+  display: grid;
+  grid-template-columns: minmax(0, 55%) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 5px;
+}
+
+.w-project {
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.w-sub {
+  min-width: 0;
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The models table has no second line, so its name takes the cell and the
+   unpriced flag takes its own width beside it. */
+.w-label.model {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.w-chip {
+  display: block;
+  white-space: nowrap;
+  font-size: 8.5px;
+  line-height: 1.1;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}
+
+/* The share indicator is the cell's own background, tinted out to the row's
+   share, with the percentage as the value on top of it. A bar element beside
+   the number cost 22px of a 56px column and truncated "100.0%".
+   The bar keeps its 28% tint, which is what makes it a bar. */
+.w-share {
+  background-image: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--accent) 28%, transparent) 0 var(--share, 0%),
+    transparent var(--share, 0%)
+  );
+}
+
+/* The percentage is `--text`, not `--dim`, and this is measured rather than
+   preferred. This is the only text in the panel printed ON TOP of its own
+   background tint, so it is the only one whose ground differs from the ground
+   every other number sits on. At `--dim` and the bar's 28% the sweep measured
+   this cell at 3.51:1 in the worst case (dark scheme, over a light backdrop),
+   with six of the thirty-two panel states under the 4.5:1 floor.
+
+   Lowering the bar's alpha does fix the number and it is the wrong fix: at 6%
+   the whole sweep clears 4.5:1 and the share column has stopped being a
+   visualization, which is the one job the column has. Measured across five
+   alphas, the floor moves 3.51 → 3.96 → 4.28 → 4.45 → 4.66 as the bar goes
+   28 → 20 → 14 → 10 → 6%, so buying legibility with the bar spends the thing
+   it is buying it with.
+
+   Giving the value primary ink fixes the number and keeps the bar, which is
+   also the honest reading of what the cell is: a percentage is a figure, and
+   the only reason it was dim is that it inherited the third column's colour.
+   With `--text` the sweep's worst leaf moves off this cell entirely and the
+   global worst becomes 4.98:1 on the 27px hero, with zero of thirty-two panel
+   states under 4.5:1. */
+.w-table td.w-share {
+  color: var(--text);
+}
+
+.w-empty {
+  font-size: 9.5px;
+  color: var(--dim);
+  margin: 0;
+  padding: 4px 6px;
+  box-shadow: inset 0 0 0 0.5px var(--glass-line);
+  border-radius: 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.w-foot {
+  font-size: 9px;
+  line-height: 1.3;
+  border-top: 1px solid var(--glass-line);
+  padding-top: 5px;
+  overflow-wrap: anywhere;
+}
+
+/* --- the quit row ------------------------------------------------------- */
+
+/*
+ * The row: last refresh on the left, the control on the
+ * right. It costs the panel 22px (18px of button, 4px of air above it), and
+ * 22px did not exist. Four reclaims, all of them whitespace rather than type,
+ * and the first two are the ones that cost the reader nothing:
+ *
+ *   1. The Models table's `margin-bottom` 7px -> 0. It is the last section on
+ *      the panel and it sat directly above the footnote's own hairline, so that
+ *      7px was air above a rule rather than a gap between two things. (7px)
+ *   2. `.widget`'s bottom padding 10px -> 6px. At a rounded window corner this
+ *      is air against AppKit's curve, not against content. (4px)
+ *   3. Section spacing 7px -> 5px between the hero and the sessions table.
+ *      (4px)
+ *   4. `.w-top`'s `margin-bottom` 6px -> 4px, because the header is one label
+ *      now that the timestamp moved down here. (2px)
+ *
+ * Net +8.68px on the ordinary panel: 405.34 of 420 at every wide range, against
+ * 396.66 before this change. No type size moved.
+ *
+ * THE ONE STATE THAT DOES NOT FIT is the truncated-list warning, and it did not
+ * fit before this change either. Measured with the old spacing reconstructed:
+ * 421.69 needed against 420 before, 426.69 after. The note line is 15.35px and
+ * the panel only ever had 13.66px of slack, so it was already over by 1.69px and
+ * these reclaims are what hold it at 6.69px rather than letting it reach 13.69px.
+ * Fixing it means choosing between a smaller note and one fewer table row, and
+ * that is a design call rather than this change's.
+ *
+ * `gap: 8px` is what keeps the timestamp's ellipsis from ever touching the
+ * button's own left inset, at every width the two of them can take.
+ */
+.w-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  /* 4px above the button. It shares the footnote's hairline rather than drawing
+   one of its own, so the two bottom rows read as one block: a footnote and the
+   control that goes with it. A second rule here would have cost the 4px this
+   spends on the gap, and would have put two hairlines 20px apart in a 340px
+   panel. */
+  margin-top: 4px;
+}
+
+.w-updated {
+  font-size: 9.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* The flex item that yields. Without this a nowrap span's min-content width
+     is its whole text, which at 9.5px is wider than the button and pushes the
+     row past 320px. Same reason `.w-label` uses a minmax(0, …) track. */
+  min-width: 0;
+}
+
+.w-updated.is-sent {
+  color: var(--text);
+}
+
+/*
+ * A macOS-sized secondary button: 18px tall, 4px radius, hairline rim, the
+ * well tint from `--seg`, primary ink. Same recipe as the selected segment's
+ * cap in `.w-seg.is-on`, minus the drop, because this one is not the thing the
+ * reader came for.
+ *
+ * The armed state is the destructive one, so it takes `--bad` rather than the
+ * neutral rim, and it is the ONLY state that changes colour. A control that
+ * looks different before and after the click is how the reader knows which
+ * click matters, which is the entire mechanism here.
+ *
+ * `:focus-visible` matches `.w-seg`'s ring exactly, and it is not decoration
+ * either: the button is in the tab order, so the ring is how a keyboard user
+ * finds the one control on the panel that ends the app.
+ *
+ * `.w-retry` and `.w-start` share this rule rather than copying it.
+ * The recipe is sixteen declarations, four of which exist only because the
+ * `font` shorthand trap bit both earlier controls: a third copy of the
+ * geometry is a third place for that drop to come back, and the panel would then
+ * have three controls of which one renders in Arial. The declarations below are
+ * unchanged, so the quit control computes to exactly what it did before; the
+ * sweep is the proof. `.w-start.is-armed` is the one state
+ * that differs, and it is written separately because a spawn is not a quit and
+ * must not wear the destructive red.
+ */
+.w-quit,
+.w-retry,
+.w-start {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  /* The 2px horizontal inset is what makes the pill's ring clear the focus
+     ring's outline-offset. See the note on `.w-quit:focus-visible`. */
+  padding: 0 8px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 1px solid var(--glass-line);
+  border-radius: 4px;
+  background: var(--seg);
+  color: var(--text);
+  /* Longhands, deliberately, and not the `font: 500 9.5px/1 inherit` shorthand.
+     A CSS-wide keyword is only valid as a shorthand's whole value, so `inherit`
+     in the family slot makes the entire declaration invalid and the browser
+     drops it: measured, `.w-quit` computed to the UA's `400 13.3333px Arial`
+     before this was changed while every other text leaf in the panel computed to
+     the panel's own 9.5px.
+
+     `.w-seg` carried the same shorthand and hit the same drop, measured at
+     `400 13.3333px Arial` against the panel's 10.5px. It was converted to
+     longhands the same way, so both buttons in the panel now inherit their
+     type rather than falling back to it. */
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.w-quit:hover:not(:disabled):not(.is-armed),
+.w-retry:hover:not(.is-armed),
+.w-start:hover:not(.is-armed) {
+  background: var(--row);
+}
+
+.w-quit.is-armed {
+  border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 22%, transparent);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Sent is not an error, so it takes the same neutral well as idle rather than
+   the armed tint: the reader has already been told what happened and the
+   button's job now is to stop inviting a second press, not to look alarming.
+   `aria-disabled` is not the `disabled` attribute, so the browser will not grey
+   this out either and nothing here has to fake it.
+
+   The ink is `--text` and NOT `--dim`, and that is measured rather than
+   preferred. A sweep over 192 leaves found `--dim` here at 4.17:1 in the
+   light scheme and 4.41:1 in the dark one, 12 of 192 leaves under the 4.5:1
+   floor, all of them this one element. `--seg` on top of the tint moves the
+   ground under the label by about 12 luminance points, and `--dim` has almost
+   no margin left to give: it measured 4.59:1 in the light scheme over
+   the bare tint. `--text` is the token that survived the refusal to accept
+   0.70 alpha, and it is the right ink for a control that ends in a state the
+   reader has to be able to read. It measures 8.02:1 worst case.
+
+   `pointer-events: none` is what stops a third click, since `aria-disabled`
+   does not. The state machine already makes the press a no-op; this stops the
+   hover well from inviting one. */
+.w-quit.is-sent,
+.w-start.is-sent {
+  color: var(--text);
+  cursor: default;
+  pointer-events: none;
+}
+
+.w-quit:focus-visible,
+.w-retry:focus-visible,
+.w-start:focus-visible {
+  /* Drawn INSIDE the button rather than outside it. An outside ring would be
+     clipped by `.widget`'s bottom padding at 420px, and would also push the
+     row's height, which the panel cannot afford. Same reason the range
+     segments use `outline-offset: -2px`. */
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* --- the offline actions row --------------------------------------------- */
+
+/*
+ * Two controls, on one row of their own, that render only when the panel cannot
+ * reach the dashboard. `widgetOfflineActions` in src/widget.ts returns null the
+ * moment a fetch lands, so a reachable panel renders neither button and this row
+ * costs it nothing.
+ *
+ * ITS OWN ROW rather than two more buttons in `.w-bar`, and the alternative was
+ * rendered rather than argued. Measured in a real 340x420 viewport, the offline
+ * panel needed **179.16px of 420**, with 240.84px of glass
+ * below the quit control and nothing in it: two empty tables are a fraction of
+ * two full ones. So a row here is free.
+ *
+ * The bar is not. Its content box is 320px and it already holds the status
+ * sentence and Quit, and "Try again" measures 62.19px and "Start oc-dash server"
+ * 117.28px at 9.5px. Putting all four in it does not overflow — the row lays out
+ * at exactly 320px — it takes the room out of the ONE thing that has to stay
+ * readable, which is the status sentence:
+ *
+ *   state          left slot gets   of a sentence that is
+ *   idle           78.00px          108.39px   "dashboard unreachabl…"
+ *   sent          102.00px          214.39px   "start request sent · t…"
+ *
+ * That is the alternative, measured by moving the two real buttons into the real
+ * bar at runtime. Half of the one
+ * line that says a request went out and what the panel is about to do is not
+ * visible, and it is the waiting state the offline path exists to get right.
+ *
+ * It sits ABOVE the footnote rather than between the footnote and the bar,
+ * because the quit row made those two rows one block on purpose: the footnote draws the
+ * hairline and `.w-bar` shares it rather than drawing a second one 20px below.
+ * Splitting them would put a row of buttons inside that block, and the block is
+ * what tells the reader which two rows are status rather than content.
+ *
+ * No border, no well, no new surface. The row is two buttons on the same glass as
+ * everything else, which is the one-surface property held: a box here would be
+ * a fourth thing with an edge, and its own contrast would have to be swept.
+ */
+.w-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  /* 5px, matching the footnote's own `padding-top` and the 4px the quit row
+     spends. It is air between the empty models table and the controls, and the
+     offline state has 240.84px of slack to spend air from. The row itself costs
+     23px: measured at 179.16 before it and 202.16 after, at every range in both
+     schemes. */
+  margin-top: 5px;
+}
+
+/*
+ * The spawn control's armed state, and the only place `.w-start` differs from
+ * `.w-quit`. A quit arms in `--bad` because a quit is the destructive one; a
+ * spawn arms in `--accent`, which is the panel's "this is now the action you
+ * asked for" colour and is the same ink the focus ring and the share bar are
+ * drawn in, so the panel has one signal for "live" rather than two.
+ *
+ * The ink stays `--text`, exactly as it does on the armed quit, so the label
+ * never becomes the thing that is hard to read. `--text` measured 8.02:1 worst
+ * case on a tinted well; on this tint, in the offline path's own sweep, the
+ * armed label measures **7.76:1** — the darkest ground any of the three new
+ * leaves ever sits on, and 3.26 above the floor.
+ */
+.w-start.is-armed {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text);
+  font-weight: 600;
+}

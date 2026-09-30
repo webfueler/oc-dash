@@ -9,10 +9,10 @@ import type {
   SummaryDegraded,
   SummaryOk,
   TokenUsage,
-} from "./api"
-import { NO_MODEL_KEY, applyFilters } from "./filters"
-import { sess } from "./tree.test"
-import type { CardMoney, CardMoneyInput } from "./summary"
+} from "../src/api"
+import { NO_MODEL_KEY, applyFilters } from "../src/filters"
+import { sess } from "./testFixtures"
+import type { CardMoney, CardMoneyInput } from "../src/summary"
 import {
   cardMoney,
   cardRange,
@@ -30,7 +30,7 @@ import {
   projectStatsUsable,
   rangeLabel,
   todayAccentDate,
-} from "./summary"
+} from "../src/summary"
 
 const zeroTokens: TokenUsage = {
   input: 0,
@@ -262,7 +262,7 @@ const statsOk = (preset: Range): SummaryOk => ({
   },
 })
 
-describe("mission 008: hero label and payload in lockstep", () => {
+describe("hero label and payload in lockstep", () => {
   const degraded = (preset: Range): SummaryDegraded => ({
     degraded: true,
     range: { preset },
@@ -279,7 +279,7 @@ describe("mission 008: hero label and payload in lockstep", () => {
 
   it("labels the hero from the summary payload, not the active range", () => {
     // A switch to 7d while the 30d payload is still on screen: the hero must
-    // keep describing the numbers it shows (007's F1).
+    // keep describing the numbers it shows.
     expect(heroRange(statsOk("30d"), sessionsFor("7d"), "7d")).toBe("30d")
     expect(heroRange(statsOk("7d"), sessionsFor("7d"), "30d")).toBe("7d")
   })
@@ -304,7 +304,7 @@ describe("mission 008: hero label and payload in lockstep", () => {
   })
 })
 
-describe("mission 008: today accent from the payload's own preset", () => {
+describe("today accent from the payload's own preset", () => {
   // Local noon on a fixed date, so isoDate is timezone-independent.
   const from = new Date(2026, 8, 9, 12).getTime()
 
@@ -315,7 +315,7 @@ describe("mission 008: today accent from the payload's own preset", () => {
   })
 
   it("never accents a non-today payload, even one with a window", () => {
-    // 007's F2: a stale non-today summary resolving while the Today tab is
+    // A stale non-today summary resolving while the Today tab is
     // active used to yield an accent date matching no bar (all bars muted).
     for (const preset of ["7d", "30d", "all"] as Range[]) {
       const s = statsOk(preset)
@@ -333,8 +333,8 @@ describe("mission 008: today accent from the payload's own preset", () => {
   })
 })
 
-// Mission 014 (PD): the filtered-totals card's pure logic.
-describe("mission 014: filter card gating (tier 2 needs project and no model)", () => {
+// The filtered-totals card's pure logic.
+describe("filter card gating (tier 2 needs project and no model)", () => {
   it("enables tier 2 for a project filter alone", () => {
     expect(filterCardTier("/tmp/proj", "")).toBe("tier2")
   })
@@ -358,7 +358,7 @@ describe("mission 014: filter card gating (tier 2 needs project and no model)", 
   })
 })
 
-describe("mission 014: project ids derived from the rows", () => {
+describe("project ids derived from the rows", () => {
   it("returns the directory's project ids, most common first", () => {
     const dirRows: SessionInfo[] = [
       sess({ id: "a", projectID: "proj" }),
@@ -384,7 +384,7 @@ describe("mission 014: project ids derived from the rows", () => {
     expect(projectIDForDirectory(dirRows, "/tmp/proj")).toEqual(["first", "second"])
   })
 
-  it("returns every id behind a multi-id directory (mission 026)", () => {
+  it("returns every id behind a multi-id directory", () => {
     const dirRows: SessionInfo[] = [
       sess({ id: "a", projectID: "p1" }),
       sess({ id: "b", projectID: "p2" }),
@@ -415,12 +415,12 @@ describe("mission 014: project ids derived from the rows", () => {
   })
 })
 
-describe("mission 014: filter card label", () => {
+describe("filter card label", () => {
   it("uses the project basename, not the full path", () => {
     expect(filterCardLabel("/Users/joaosantos/Sites/personal/oc-setup", "")).toBe("oc-setup")
   })
 
-  it("uses the model's short id form, no provider and no variant (mission 019)", () => {
+  it("uses the model's short id form, no provider and no variant", () => {
     expect(filterCardLabel("", "opencode-go/glm-5.3-flash")).toBe("glm-5.3-flash")
   })
 
@@ -436,7 +436,7 @@ describe("mission 014: filter card label", () => {
     expect(filterCardLabel("", "")).toBe("")
   })
 
-  it("uses the display name when the map has it, the short id otherwise (mission 044)", () => {
+  it("uses the display name when the map has it, the short id otherwise", () => {
     expect(
       filterCardLabel("/tmp/proj", "opencode-go/glm-5.3-flash", {
         "opencode-go/glm-5.3-flash": "GLM 5.3 Flash",
@@ -451,7 +451,7 @@ describe("mission 014: filter card label", () => {
   })
 })
 
-describe("mission 014: card label range tracks the rows' payload", () => {
+describe("card label range tracks the rows' payload", () => {
   const sessionsFor = (preset: Range): SessionsPayload => ({
     range: { preset },
     count: 1,
@@ -473,7 +473,7 @@ describe("mission 014: card label range tracks the rows' payload", () => {
   })
 })
 
-describe("mission 014: tier-2 zeros guard", () => {
+describe("tier-2 zeros guard", () => {
   it("accepts a payload that counts sessions", () => {
     expect(projectStatsUsable({ sessions: 15, subagents: 114 }, 129, 100)).toBe(true)
   })
@@ -489,7 +489,7 @@ describe("mission 014: tier-2 zeros guard", () => {
   })
 })
 
-describe("mission 014: tier-1 totals come from the filtered rows", () => {
+describe("tier-1 totals come from the filtered rows", () => {
   // Two directories, two model triples, one subagent, so every filter
   // combination moves the numbers.
   const rows: SessionInfo[] = [
@@ -563,8 +563,8 @@ describe("mission 014: tier-1 totals come from the filtered rows", () => {
 })
 
 /**
- * Mission 026: the card-money resolver. Fixtures model the live shapes
- * from missions 024/025: a global stats payload with per-variant models[]
+ * The card-money resolver. Fixtures model the live shapes: a global stats
+ * payload with per-variant models[]
  * rows, and per-project payloads whose totals and rows can each be zeroed,
  * scoped, or missing.
  */
@@ -626,7 +626,7 @@ function mInput(over: Partial<CardMoneyInput>): CardMoneyInput {
   }
 }
 
-describe("mission 026: card money — model filter only", () => {
+describe("card money — model filter only", () => {
   const walk = [
     sess({ id: "a", cost: 1.25, model: { providerID: "p", id: "m", variant: "high" } }),
     sess({ id: "b", cost: 0.4, model: { providerID: "p", id: "m", variant: "max" } }),
@@ -722,7 +722,7 @@ describe("mission 026: card money — model filter only", () => {
   })
 })
 
-describe("mission 026: card money — directory filter only", () => {
+describe("card money — directory filter only", () => {
   const walk = [
     sess({ id: "a", cost: 1, projectID: "p1" }),
     sess({ id: "b", cost: 2, projectID: "p1" }),
@@ -795,7 +795,7 @@ describe("mission 026: card money — directory filter only", () => {
   })
 
   it("treats a single all-zero payload as a failed fetch when its rows show sessions", () => {
-    // The per-payload guard (024 follow-up caveat): an all-zero payload
+    // The per-payload guard: an all-zero payload
     // means the fetch or scope failed — never a real $0 while the walk
     // shows sessions for that id.
     const r = cardMoney(
@@ -825,7 +825,7 @@ describe("mission 026: card money — directory filter only", () => {
   })
 })
 
-describe("mission 026: card money — directory AND model", () => {
+describe("card money — directory AND model", () => {
   const walk = [
     sess({ id: "a", cost: 1, projectID: "p1", model: { providerID: "p", id: "m" } }),
     sess({ id: "b", cost: 4, projectID: "p2", model: { providerID: "p", id: "m" } }),
@@ -922,12 +922,12 @@ describe("mission 026: card money — directory AND model", () => {
 })
 
 /**
- * Mission 028 (H1): the exclusivity cut. The live shape that broke 026:
+ * The exclusivity cut. The live shape it exists for:
  * project `global` carries sessions in TWO directories (swimsquid and the
  * personal directory), so its stats payload is not the personal directory's
- * money. Fixtures mirror the real ids and money from mission 027.
+ * money. Fixtures mirror the real ids and money.
  */
-describe("mission 028: exclusivity cut — shared ids fall back", () => {
+describe("exclusivity cut — shared ids fall back", () => {
   const personal = "/Users/joaosantos/Sites/personal"
   const swimsquid = "/Users/joaosantos/Sites/personal/swimsquid"
   // All-time walk: global spans both directories, 2f8a is personal-only.
@@ -1077,7 +1077,7 @@ describe("mission 028: exclusivity cut — shared ids fall back", () => {
   })
 })
 
-describe("mission 028: exclusive ids keep exact stats money", () => {
+describe("exclusive ids keep exact stats money", () => {
   it("oc-setup dir-only and dir+model stay exact (its id is exclusive)", () => {
     const oc = "/Users/joaosantos/Sites/personal/oc-setup"
     const walk = [
@@ -1152,7 +1152,7 @@ describe("mission 028: exclusive ids keep exact stats money", () => {
   })
 })
 
-describe("mission 028: note discipline (M1)", () => {
+describe("note discipline", () => {
   const exact: CardMoney = { cost: 1, source: "stats", conflict: false }
   const approx: CardMoney = { cost: 1, source: "fallback", conflict: false }
 

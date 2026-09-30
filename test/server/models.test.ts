@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { modelNames, parseModelNames, resetModelNamesCache } from "./models.js"
+import { modelNames, parseModelNames, resetModelNamesCache } from "../../server/models.js"
 
-// Mission 044: the /api/model payload shape from the live service (mission
-// 043's report), trimmed to the fields the parse reads.
+// The /api/model payload shape from the live service, trimmed to the fields
+// the parse reads.
 const MODEL_ENTRY = {
   id: "deepseek-flash",
   modelID: "deepseek-flash",
@@ -13,12 +13,12 @@ const MODEL_ENTRY = {
 const oc = { endpoint: { url: "http://127.0.0.1:41111" } } as never
 
 // ocGetJson is the only network touch; stub it per test.
-vi.mock("./opencode.js", () => ({
+vi.mock("../../server/opencode.js", () => ({
   ocGetJson: vi.fn(),
   errorMessage: (err: unknown) => String(err),
 }))
 
-import { ocGetJson } from "./opencode.js"
+import { ocGetJson } from "../../server/opencode.js"
 
 const getJson = vi.mocked(ocGetJson)
 

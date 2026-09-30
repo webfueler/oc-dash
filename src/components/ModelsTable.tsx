@@ -17,12 +17,12 @@ export function ModelsTable({ rows, names }: { rows: ModelRow[]; names?: ModelNa
       <tbody>
         {rows.map((m) => {
           const base = `${m.providerID}/${m.id}`
-          // Mission 044: the visible name is the /api/model display name when
-          // mapped, today's raw "providerID/id · variant" otherwise; the raw
+          // The visible name is the /api/model display name when
+          // mapped, the raw "providerID/id · variant" otherwise; the raw
           // form stays reachable as the hover title and the row key.
           const full = `${base}${m.variant ? ` · ${m.variant}` : ""}`
-          // Fallback is the full raw base, not the short form: HEAD rendered
-          // "providerID/id · variant" before mission 044.
+          // The fallback is the full raw base, not the short id-form the
+          // sessions table uses.
           const name = `${names?.[base] || base}${m.variant ? ` · ${m.variant}` : ""}`
           return (
             <tr key={full}>

@@ -14,7 +14,7 @@ import {
  * P1: one hero card for the number the dashboard exists to show, with the
  * other stats demoted to a compact strip. Works in degraded mode too — the
  * fallback badge rides on the hero and the strip shows the fallback totals.
- * Mission 008 (007's F1): the range label comes from the same payload as the
+ * The range label comes from the same payload as the
  * value (heroRange), so a range switch never shows the new label over the
  * previous range's numbers — both flip together when the fetch lands.
  */

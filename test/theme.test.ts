@@ -8,7 +8,7 @@ import {
   persistTheme,
   readStoredTheme,
   type ThemeRoot,
-} from "./theme"
+} from "../src/theme"
 
 /**
  * Fake documentElement: the data-theme attribute is modeled as a map so

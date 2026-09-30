@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { fetchModelNames } from "./api"
+import { fetchModelNames } from "../src/api"
 
 /**
- * Mission 047: the seam mission 044 missed. fetchModelNames must unwrap the
- * route's { names: {...} } envelope — mission 046's review found every label
- * surface dead because the client stored the envelope itself as the map.
+ * The seam: fetchModelNames must unwrap the
+ * route's { names: {...} } envelope. Storing the envelope itself as the map
+ * left every label
+ * surface dead.
  */
 describe("fetchModelNames", () => {
   afterEach(() => {

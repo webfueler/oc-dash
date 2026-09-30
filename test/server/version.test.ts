@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { compareVersions } from "./version.js"
+import { compareVersions } from "../../server/version.js"
 
 describe("compareVersions", () => {
   it("orders equal, older, and newer x.y.z versions", () => {

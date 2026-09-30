@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { SessionInfo } from "./api"
+import type { SessionInfo } from "../src/api"
 import {
   NO_MODEL_KEY,
   applyFilters,
@@ -13,16 +13,16 @@ import {
   staleModelOption,
   staleProjectOption,
   withStaleOption,
-} from "./filters"
-import { buildTree } from "./tree"
-import { sess } from "./tree.test"
+} from "../src/filters"
+import { buildTree } from "../src/tree"
+import { sess } from "./testFixtures"
 
 const OC_SETUP = "/Users/joaosantos/Sites/personal/oc-setup"
 const PERSONAL = "/Users/joaosantos/Sites/personal"
 
 /**
- * Synthetic rows shaped like the live 7d payload the scout measured (mission
- * 011): two directories, one model id split across two variants, a second
+ * Synthetic rows shaped like the live 7d payload: two directories, one model
+ * id split across two variants, a second
  * provider, and one row without a model. Shapes and relationships, not exact
  * live values.
  */
@@ -88,7 +88,7 @@ describe("modelBaseKey / modelShortLabel", () => {
   })
 })
 
-describe("modelDisplayName (mission 044: /api/model display names)", () => {
+describe("modelDisplayName (/api/model display names)", () => {
   const names = { "opencode-go/glm-5.3-flash": "GLM 5.3 Flash" }
 
   it("prefers the mapped display name", () => {
@@ -118,7 +118,7 @@ describe("modelOptions", () => {
     ])
   })
 
-  it("collapses the variants of one id into a single base bucket (mission 019)", () => {
+  it("collapses the variants of one id into a single base bucket", () => {
     const opts = modelOptions(rows())
     const glm = opts.filter((o) => o.key === "opencode-go/glm-5.3-flash")
     expect(glm).toHaveLength(1)
@@ -133,7 +133,7 @@ describe("modelOptions", () => {
     expect(glm?.label).toBe("glm-5.3-flash")
   })
 
-  it("labels real models with the display name when the map has it (mission 044)", () => {
+  it("labels real models with the display name when the map has it", () => {
     const opts = modelOptions(rows(), {
       "opencode-go/glm-5.3-flash": "GLM 5.3 Flash",
     })
@@ -211,7 +211,7 @@ describe("modelComboOptions", () => {
     expect(hits.map((o) => o.key)).toEqual(["github-copilot/gpt-5.6-luna"])
   })
 
-  it("shows the short id label with the full base as detail (mission 019)", () => {
+  it("shows the short id label with the full base as detail", () => {
     const opts = modelComboOptions(rows(), 5)
     const glm = opts.find((o) => o.key === "opencode-go/glm-5.3-flash")
     expect(glm?.label).toBe("glm-5.3-flash")
@@ -224,7 +224,7 @@ describe("modelComboOptions", () => {
     expect(nm?.searchText).toBe("no model")
   })
 
-  it("shows the display name as the label with the base key kept as detail (mission 044)", () => {
+  it("shows the display name as the label with the base key kept as detail", () => {
     const opts = modelComboOptions(rows(), 5, { "opencode-go/glm-5.3-flash": "GLM 5.3 Flash" })
     const glm = opts.find((o) => o.key === "opencode-go/glm-5.3-flash")
     expect(glm?.label).toBe("GLM 5.3 Flash")
@@ -240,7 +240,7 @@ describe("modelComboOptions", () => {
   })
 })
 
-describe("withStaleOption (mission 020: filters always visible)", () => {
+describe("withStaleOption (filters always visible)", () => {
   it("passes the options through when the value is empty or present", () => {
     const project = projectComboOptions(rows(), 5)
     expect(withStaleOption(project, "", staleProjectOption)).toBe(project)
@@ -250,7 +250,7 @@ describe("withStaleOption (mission 020: filters always visible)", () => {
   })
 
   it("re-adds a held project value the current range has no row for, at 0", () => {
-    // The Captain's case: a project picked in 7d, faced with a range whose
+    // A project picked in 7d, faced with a range whose
     // rows hold nothing for it (here: an empty payload entirely).
     const stale = withStaleOption(projectComboOptions([], 0), OC_SETUP, staleProjectOption)
     expect(stale).toHaveLength(2)
@@ -281,7 +281,7 @@ describe("withStaleOption (mission 020: filters always visible)", () => {
     })
   })
 
-  it("re-adds a held model value with the display name when mapped (mission 044)", () => {
+  it("re-adds a held model value with the display name when mapped", () => {
     const stale = withStaleOption(
       modelComboOptions([], 0),
       "opencode-go/glm-5.3-flash",
@@ -341,7 +341,7 @@ describe("applyFilters", () => {
     expect(applyFilters(rows(), "/nope", "")).toEqual([])
   })
 
-  it("matches both variants of one model, variant-agnostic (mission 019)", () => {
+  it("matches both variants of one model, variant-agnostic", () => {
     // a1 is the default variant, a2/a3 the max: one base filter takes all.
     expect(applyFilters(rows(), "", "opencode-go/glm-5.3-flash").map((s) => s.id)).toEqual([
       "a1",

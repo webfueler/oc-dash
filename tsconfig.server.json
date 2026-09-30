@@ -13,6 +13,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["server"],
-  "exclude": ["server/**/*.test.ts"]
+  "include": ["server"]
 }

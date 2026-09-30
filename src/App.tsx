@@ -33,7 +33,7 @@ export function App() {
   const [range, setRange] = useState<Range>("7d")
   const [summary, setSummary] = useState<SummaryResponse | null>(null)
   const [sessions, setSessions] = useState<SessionsPayload | null>(null)
-  // Mission 044: providerID/id -> display name for the model label surfaces.
+  // providerID/id -> display name for the model label surfaces.
   // An empty map (or a failed fetch, which keeps the current value) means the
   // raw-id fallback labels; the filter semantics never touch it.
   const [modelNames, setModelNames] = useState<ModelNames>({})
@@ -43,24 +43,24 @@ export function App() {
   const [loaded, setLoaded] = useState(false)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [directory, setDirectory] = useState<string>("")
-  // Mission 013 (PC), 019 granularity: the model filter — a base
+  // The model filter — a base
   // "providerID/id" key (the reasoning variant ignored) or "" for all, with
   // the same client-side post-filter semantics as `directory` (range
   // switches keep it, like the project filter).
   const [model, setModel] = useState<string>("")
   // P2: collapsed every load; a parent id lands here only once it is expanded.
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
-  // Mission 058: the Sessions column sort, one column at a time; `null` is
+  // The Sessions column sort, one column at a time; `null` is
   // the default (base input order). `changeRange` leaves it alone, so the
   // choice survives range switches like the filters do.
   const [sort, setSort] = useState<SortState | null>(null)
 
-  // Mission 015 (PB): the stored theme choice. The pre-paint script in
+  // The stored theme choice. The pre-paint script in
   // index.html already applied it to <html> before first paint; React just
   // mirrors it so the control's active segment matches what is on screen.
   const [theme, setTheme] = useState<ThemeChoice>(() => readStoredTheme(browserStorage()))
 
-  // Mission 014 (PD Q4a) + 026: project pass-through. Whenever a directory
+  // Project pass-through. Whenever a directory
   // filter is active (with or without a model filter — the per-project
   // models[] rows also feed the card's money under directory+model), the
   // request carries project=<id[,id...]> for ALL project ids behind the
@@ -71,7 +71,7 @@ export function App() {
     return projectIDForDirectory(sessions?.data ?? [], directory).join(",")
   }, [sessions, directory])
 
-  // Mission 026: the array form the card consumes (payload matching, money).
+  // The array form the card consumes (payload matching, money).
   const cardProjectIDs = useMemo(
     () => (cardProjectsParam ? cardProjectsParam.split(",") : []),
     [cardProjectsParam],
@@ -83,7 +83,7 @@ export function App() {
     setExpanded(new Set())
   }, [])
 
-  // Mission 015 (PB): the pre-paint script already applied the stored choice;
+  // The pre-paint script already applied the stored choice;
   // this effect keeps <html> in step from here on (idempotent on mount, live
   // on change). No matchMedia listener anywhere: system mode stays
   // attribute-free, so the OS media query re-themes natively on OS flips.
@@ -121,7 +121,7 @@ export function App() {
         ok: true,
         service: { url: null, healthy: false, version: null, error: "dashboard backend unreachable" },
       })
-    // Mission 044: best-effort name map. A rejected fetch keeps the
+    // Best-effort name map. A rejected fetch keeps the
     // previously loaded map; the server's degraded 200 (`{ names: {} }`)
     // arrives as an empty map and replaces it, so labels fall back to the
     // raw ids until the next successful fetch. No error surface.
@@ -151,7 +151,7 @@ export function App() {
     }
   }, [refresh])
 
-  // Mission 013 (PA/PC), 020 always-visible: combobox options derived from
+  // Combobox options derived from
   // the same rows the old select used — live counts over the visible range,
   // All first with the payload count. withStaleOption re-adds a held filter
   // value the current range has no rows for (7d pick faced with Today), so
@@ -176,7 +176,7 @@ export function App() {
     [sessions, model, modelNames],
   )
 
-  // Mission 013 (PC) + 014 (PD): directory AND model compose in this memo,
+  // Directory AND model compose in this memo,
   // model applied after directory, both before buildTree so the tree
   // reflects the intersection and a filtered-out parent cannot visibly
   // promote its children. Hero, Models table, and chart stay global — the
@@ -187,7 +187,7 @@ export function App() {
     [sessions, directory, model],
   )
   const tree = useMemo(() => buildTree(filteredRows), [filteredRows])
-  // Mission 058: the same post-filter tree, ordered while a column is
+  // The same post-filter tree, ordered while a column is
   // active; `null` keeps the base order, so the page loads default.
   const sortedTree = useMemo(() => sortNodes(tree, sort), [tree, sort])
 
@@ -208,7 +208,7 @@ export function App() {
     setExpanded(new Set())
   }, [])
 
-  // Mission 058: a header activation cycles its column default -> ascending
+  // A header activation cycles its column default -> ascending
   // -> descending -> default; picking another column starts there at
   // ascending and drops the previous one.
   const cycleSort = useCallback((key: SortKey) => {
@@ -225,7 +225,7 @@ export function App() {
   const activity = okSummary?.data.activity
   const contextActivity = okSummary?.contextActivity
   // Today's chart accents the in-range day (local midnight from the stats
-  // window). Mission 008 (007's F2): gated on the payload's own preset, not
+  // window). Gated on the payload's own preset, not
   // the active range state, so a stale non-today payload that is still on
   // screen after a switch to Today renders as a plain chart instead of
   // accenting a date that matches no bar (which muted every bar).
@@ -274,10 +274,10 @@ export function App() {
               session list instead
             </div>
           )}
-          {/* Mission 023: the filter row lives in a fixed slot after the
+          {/* The filter row lives in a fixed slot after the
               hero/KPI area, ahead of the conditional card, so picking or
-              clearing a filter never moves the row vertically. Mission 020:
-              both comboboxes render ALWAYS on the same rule as before —
+              clearing a filter never moves the row vertically. Both
+              comboboxes render ALWAYS on the same rule as before —
               one directory, zero directories, or a held filter matching
               nothing in this range all keep the controls on screen. */}
           <div className="filters-row" role="group" aria-label="Filters">
@@ -303,10 +303,10 @@ export function App() {
               />
             </div>
           </div>
-          {/* Mission 014 (PD, Q5a): the filtered card renders whenever any
+          {/* The filtered card renders whenever any
               filter is active, no dismiss state of its own; it recomputes
-              from the poll's payloads. The hero above stays global. Slot
-              per Mission 023: below the fixed filter row, above the
+              from the poll's payloads. The hero above stays global. It sits
+              below the fixed filter row, above the
               Sessions section. */}
           {(directory !== "" || model !== "") && (
             <FilterSummaryCard
@@ -325,9 +325,8 @@ export function App() {
             <div className="section-head">
               <h2>Sessions</h2>
               <div className="section-tools">
-                {/* Mission 023: the two filter comboboxes moved up to the
-                    fixed .filters-row slot after the hero/KPI area (Mission
-                    020's always-visible rule unchanged, just relocated);
+                {/* The two filter comboboxes live in the
+                    fixed .filters-row slot after the hero/KPI area;
                     the head keeps the expand/collapse controls only. */}
                 {treeHasParents && (
                   <div className="tree-controls" role="group" aria-label="Tree expansion">
@@ -400,7 +399,7 @@ function HealthBanner({ health }: { health: HealthResponse | null }) {
 const UPDATE_DISMISS_KEY = "oc-dash.update-dismissed"
 
 /**
- * Mission 014: the dismissible update notice, below the health banner. It
+ * The dismissible update notice, below the health banner. It
  * renders only when /api/health says a newer version is published, and the
  * dismissal is keyed to that version so a later release can surface again.
  * Reload is the action that actually picks up a checkout update, because
@@ -460,7 +459,7 @@ function UpdateNotice({ dashboard }: { dashboard?: DashboardUpdate }) {
   )
 }
 
-// Mission 015 (PB): the 3-segment system | dark | light control, in the
+// The 3-segment system | dark | light control, in the
 // topbar next to the range tabs. It reuses oc-dash's own segmented language
 // (.tabs/.tab/.active) verbatim — same border, radius, and accent active
 // state, which stays visible in all three themes. Active segment per the

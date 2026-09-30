@@ -48,7 +48,7 @@ dashboard too.
 ```
 server/          Hono backend (routes, service connection, range mapping, walk)
 src/             React frontend (components, tree and rollup logic, formatting)
-src/*.test.ts    Client tests (vitest); server tests live under server/
+test/            Vitest suites, mirroring the source layout (test/server/ for the backend)
 bin/oc-dash.js   npx launcher (runs the compiled server)
 dist/            Built frontend (gitignored)
 dist-server/     Compiled server (gitignored)

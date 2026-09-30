@@ -15,23 +15,23 @@ import {
 } from "../summary"
 
 /**
- * Mission 014 (PD, Q4a + Q5a): the filtered-totals card. Renders below the
- * hero whenever any filter is active (Q5a) — no state of its own — and
+ * The filtered-totals card. Renders below the
+ * hero whenever any filter is active — no state of its own — and
  * recomputes from the payloads the 30-second poll already replaces.
  *
  * Row tiles (always): tokens, sessions, subagents, client-side from the
  * post-filter session rows via the fallbackTotals pattern.
  *
- * Mission 026: the MONEY is resolved by cardMoney from the message-level
+ * The MONEY is resolved by cardMoney from the message-level
  * stats engine — the global payload's models[] row under a model filter,
  * the per-project payload totals under a directory filter, the per-project
- * models[] rows under directory+model. Mission 028 (H1): the directory
+ * models[] rows under directory+model. The directory
  * money is exact only when every project id behind the directory is
  * exclusive to it and the walk is not truncated; otherwise the whole money
  * is the row sum. Fallback money is visibly labeled approximate (the "≈" on
  * the value plus the sub line); a stats-row-absent-vs-sessions-labeled
  * disagreement surfaces as a conflict note instead of either number showing
- * silently. Mission 028 (M1): every note and sub-line is true of the number
+ * silently. Every note and sub-line is true of the number
  * it accompanies — stats money excludes compaction usage, the row sum
  * includes it plus upstream drift.
  *
@@ -64,18 +64,18 @@ export function FilterSummaryCard({
   /** Fallback label range when no session payload is on screen. */
   activeRange: Range
   /**
-   * ALL project ids behind the directory filter (mission 026 — a
+   * ALL project ids behind the directory filter (a
    * directory can map to more than one), empty when none. The per-project
    * stats payloads are matched against these ids; index 0 is the primary
    * id whose payload feeds the tier-2 tiles.
    */
   projectIDs: string[]
-  /** Mission 044: providerID/id -> display name for the card's model label. */
+  /** providerID/id -> display name for the card's model label. */
   names?: ModelNames
 }) {
   // Tier 1 is the exact fallback pipeline the hero's degraded mode uses:
   // row sums for tokens, sessions, subagents, with the stats-only fields
-  // null. The MONEY comes from cardMoney (mission 026) — exact when the
+  // null. The MONEY comes from cardMoney — exact when the
   // stats route serves the combination, the row sum labeled approximate
   // when it cannot.
   const kpis = kpisFromFallback(fallbackTotals(rows))
@@ -112,7 +112,7 @@ export function FilterSummaryCard({
 
   const sub: string[] = []
   if (perDay != null) sub.push(`≈ ${fmtUSD(perDay)}/day`)
-  // Mission 028 (M1): the sub-line comes from the shared helper so the copy
+  // The sub-line comes from the shared helper so the copy
   // is pinned by tests — true of the number it accompanies on every path.
   sub.push(moneySubLine(money, model))
 

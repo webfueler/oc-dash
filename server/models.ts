@@ -1,6 +1,6 @@
 import { ocGetJson, type OpencodeContext } from "./opencode.js"
 
-/** Mission 044: providerID/id -> display name, served to the label surfaces. */
+/** providerID/id -> display name, served to the label surfaces. */
 export type ModelNames = Record<string, string>
 
 /**
@@ -39,8 +39,8 @@ export function parseModelNames(payload: unknown): ModelNames {
 }
 
 // The model catalog is static for the life of a service, so a success lives
-// an hour and a failure retries sooner — the update-check pattern
-// (index.ts:43-44): the caller never waits on a cold fetch more than once
+// an hour and a failure retries sooner — the update-check pattern in
+// index.ts: the caller never waits on a cold fetch more than once
 // per window, and any failure degrades to an empty map (raw-id labels).
 const MODEL_NAMES_TTL_MS = 60 * 60 * 1000
 const MODEL_NAMES_RETRY_MS = 5 * 60 * 1000

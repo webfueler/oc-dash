@@ -70,10 +70,10 @@ export interface SummaryOk {
    */
   contextActivity?: ActivityDay[]
   /**
-   * Mission 014 (PD Q4a): additive, present only when the request carried
+   * Additive, present only when the request carried
    * project=<id(s)> and the extra upstream stats call(s) succeeded. Each
    * project id is echoed so the client can match the payloads to the filter
-   * on screen before trusting their numbers. Mission 026: a list — one
+   * on screen before trusting their numbers. A list — one
    * payload per requested project id, since a directory can map to more
    * than one.
    */
@@ -81,7 +81,7 @@ export interface SummaryOk {
 }
 
 /**
- * Mission 014 (PD Q4a): the per-project stats payload behind the filtered
+ * The per-project stats payload behind the filtered
  * card's tier-2 tiles. Same stats shape as `data`, scoped to one project.
  */
 export interface ProjectStats {
@@ -107,7 +107,7 @@ export interface SessionsPayload {
 }
 
 /**
- * Mission 044: providerID/id -> display name, from the server's /api/model
+ * providerID/id -> display name, from the server's /api/model
  * lookup. Missing keys (or the whole map) mean the raw-id fallback labels.
  */
 export type ModelNames = Record<string, string>
@@ -122,7 +122,7 @@ export interface DashboardUpdate {
 export interface HealthResponse {
   ok: boolean
   /**
-   * Mission 014: oc-dash's own version and the registry's latest. The real
+   * oc-dash's own version and the registry's latest. The real
    * server always sends it; the client's fabricated unreachable-fallback
    * below omits it, so the update notice treats it as optional.
    */
@@ -142,7 +142,7 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 /**
- * Mission 014 (PD Q4a): optional project pass-through. Mission 026: the
+ * Optional project pass-through. The
  * param carries a comma-separated list of project ids (all the ids behind
  * the directory filter). Existing callers are unaffected — the param is
  * sent only while the card wants project-scoped stats, and /api/summary
@@ -158,7 +158,7 @@ export function fetchSessions(range: Range): Promise<SessionsPayload> {
 }
 
 /**
- * Mission 044: the display-name map. The route wraps it as `{ names: {...} }`
+ * The display-name map. The route wraps it as `{ names: {...} }`
  * and answers `{ names: {} }` on failure; an empty map is a valid payload,
  * not an error — the label helpers fall back.
  */

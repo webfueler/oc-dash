@@ -1,11 +1,12 @@
-import { serve } from "@hono/node-server"
 import { serveStatic } from "@hono/node-server/serve-static"
 import { Hono } from "hono"
 import { existsSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { errorMessage, getOpencode, ocGetJson, type OpencodeContext } from "./opencode.js"
+import { listenHttp } from "./listen.js"
 import { modelNames } from "./models.js"
 import { contextStatsRange, localTimezone, parseProjectParam, parseRangePreset, resolveRange } from "./ranges.js"
+import { removeRegistry, serviceMode, writeRegistry } from "./registry.js"
 import { compareVersions } from "./version.js"
 import { walkSessions, type RawPage } from "./walk.js"
 
@@ -16,8 +17,14 @@ const PORT = Number(process.env.PORT) || 4021
 // the launcher from wherever the user happens to be).
 const DIST_ROOT = fileURLToPath(new URL("../dist", import.meta.url))
 const DIST_INDEX = fileURLToPath(new URL("../dist/index.html", import.meta.url))
+// The compact menu bar panel's own HTML entry. It is a
+// separate Vite entry (widget.html), not a route inside the dashboard's
+// SPA, so `/widget` has to hand back this file rather than fall through to
+// the SPA fallback below. Sits directly on the static root so it shares
+// the same miss behaviour as any other absent asset.
+const DIST_WIDGET = fileURLToPath(new URL("../dist/widget.html", import.meta.url))
 
-// Mission 014: the update check. oc-dash's own version is read from the
+// The update check. oc-dash's own version is read from the
 // manifest one level up (readFileSync sidesteps a bare JSON import, which
 // tsconfig.server.json's rootDir: "server" forbids; the URL resolves from
 // server/, dist-server/, and the published package alike). The registry's
@@ -89,9 +96,9 @@ async function listPage(oc: OpencodeContext, cursor?: string): Promise<RawPage> 
 
 /**
  * session.stats via the typed client with a raw-fetch fallback.
- * Mission 014 (PD Q4a): an optional project pass-through — the upstream
- * param already exists (project id); only the per-project tier-2 call
- * sends it, the hero's main stats call never does.
+ * The optional project pass-through uses a param the upstream already has
+ * (project id); only the per-project tier-2 calls send it, the hero's main
+ * stats call never does.
  */
 async function statsCall(
   oc: OpencodeContext,
@@ -163,16 +170,17 @@ app.get("/api/summary", async (c) => {
   }
   const range = resolveRange(preset)
   const tz = localTimezone()
-  // Mission 014 (PD Q4a): additive project param. When present, ONE extra
-  // best-effort upstream stats call with project=<id> feeds the filtered
-  // card's tier-2 tiles. Fired in parallel with the main call so the hero's
-  // latency is untouched; on failure it resolves to undefined and the field
-  // is omitted (the contextActivity pattern), never an error surface.
+  // Additive project param. When present, one best-effort upstream stats
+  // call per id feeds the filtered card's tier-2 tiles. The calls are
+  // created before the main stats call is awaited, so they run in parallel
+  // with it and the hero's latency is untouched; a failed call resolves to
+  // null and is dropped (the contextActivity pattern), never an error
+  // surface.
   const project = parseProjectParam(c.req.query("project")) ?? []
   try {
     const oc = await getOpencode()
-    // Mission 026: one best-effort upstream stats call per project id behind
-    // the directory filter, all fired in parallel with the main call so the
+    // One best-effort upstream stats call per project id behind the
+    // directory filter, all started before the main call is awaited so the
     // hero's latency is untouched. A failed call drops out of the list; the
     // field is omitted when none succeed (never an error surface).
     const projectCalls = project.map((id) => statsCall(oc, range, tz, id).catch(() => null))
@@ -206,10 +214,10 @@ app.get("/api/summary", async (c) => {
       }
     }
     // Additive, Today-only: trailing 7 days of activity so the chart can
-    // render the in-range day next to muted context days. Fired in parallel
-    // with the main stats call (mission 008, 007's F4) so Today pays one
-    // upstream round-trip instead of two serial ones. Still best effort: a
-    // failed context call resolves to undefined and the field is omitted.
+    // render the in-range day next to muted context days. Created after the
+    // main stats call has been awaited, so it adds a second, serial upstream
+    // round-trip on Today. Still best effort: a failed context call resolves
+    // to undefined and the field is omitted.
     let contextActivity: unknown
     const ctxRange = contextStatsRange(preset)
     const ctxCall = ctxRange ? statsCall(oc, ctxRange, tz).catch(() => undefined) : undefined
@@ -254,7 +262,7 @@ app.get("/api/sessions", async (c) => {
   }
 })
 
-// Mission 044: the providerID/id -> display-name map for the label surfaces
+// The providerID/id -> display-name map for the label surfaces
 // (session chips, model filter, card header, models table). A separate
 // lookup, not the stats path; the cache inside modelNames() keeps this at
 // one upstream fetch per TTL window. Never an error surface: the client
@@ -267,6 +275,25 @@ app.get("/api/model-names", async (c) => {
     return c.json({ names: {} })
   }
 })
+
+// The menu bar widget page. Registered before the static root
+// and the SPA fallback, both of which would otherwise answer `/widget` with
+// the full dashboard's index.html. It is a plain GET on two exact paths, so
+// it cannot shadow `/api/*` (those are matched above) or any other static
+// asset; `/widget.html` needs no route at all because the static root below
+// serves it by name. A miss (dist/widget.html absent, i.e. a build that
+// predates the widget entry) falls through to the same SPA fallback as any
+// other unknown path, which is the pre-existing behaviour.
+//
+// `/widget/` is on the list because Hono reads it as a
+// different path, so without it the one trailing-slash miss answered 200
+// with the whole dashboard — a broken panel at 340x420 rather than a wrong
+// URL, since nothing says the path was wrong. One resource, three paths
+// (`/widget`, `/widget/`, `/widget.html`) should all be that resource.
+// Two calls rather than an array of paths: this Hono version's types take
+// a single string.
+app.get("/widget", serveStatic({ path: DIST_WIDGET }))
+app.get("/widget/", serveStatic({ path: DIST_WIDGET }))
 
 // Built frontend (production). API routes above take precedence.
 app.use("*", serveStatic({ root: DIST_ROOT }))
@@ -285,9 +312,11 @@ async function checkServiceAtStartup(): Promise<void> {
 
 No running opencode service was found. The dashboard reads everything
 from the opencode2 service over HTTP, so opencode must be installed and
-a service must be running. Start the service, then run oc-dash again:
+a service must be running. Start the service, then start the dashboard
+again:
 
     opencode serve --service
+    npx @webfueler/oc-dash server start
 
 If you don't have opencode yet, install it with:
 
@@ -300,14 +329,42 @@ More options: https://opencode.ai`)
 
 await checkServiceAtStartup()
 
-const server = serve({ fetch: app.fetch, port: PORT, hostname: "127.0.0.1" }, (info) => {
-  console.log(`oc-dash listening on http://127.0.0.1:${info.port}`)
-})
-
-server.on("error", (err) => {
+// The port comes from the same precedence it always did (PORT,
+// else 4021) but the CLI can now set either before importing this module.
+// Service mode is the only thing that changes behaviour here: it lets a busy
+// port fall back to a free one, and it hands the registry file over to the
+// process that is listening. Every `oc-dash server start` turns it on,
+// `--foreground` included. The last caller that left it
+// off is gone -- the bare `npx oc-dash`, which now prints help and never
+// gets here -- so the EADDRINUSE arm below is reachable only from `npm
+// start` and `npm run dev:server`, which run this file with no CLI around
+// it.
+const bound = await listenHttp(app.fetch, PORT, { fallback: serviceMode() }).catch((err) => {
   if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
-    console.error(`port ${PORT} is in use, try PORT=${PORT + 1} npx @webfueler/oc-dash`)
+    console.error(
+      `port ${PORT} is in use. This is the no-fallback path, so it will not\n` +
+        `move: either free ${PORT}, or run it with a different one:\n\n` +
+        `    PORT=${PORT + 1} npm start\n\n` +
+        `Or let the CLI pick a free port for you:\n\n` +
+        `    npx @webfueler/oc-dash server start`,
+    )
     process.exit(1)
   }
   throw err
 })
+
+console.log(`oc-dash listening on http://127.0.0.1:${bound.port}`)
+
+if (serviceMode()) {
+  writeRegistry({ port: bound.port, pid: process.pid })
+  // A clean SIGTERM closes the listener and deletes the registry, so a stop
+  // never leaves a pid behind pointing at a process that is gone.
+  const shutdown = () => {
+    bound.server.close(() => {
+      removeRegistry()
+      process.exit(0)
+    })
+  }
+  process.once("SIGTERM", shutdown)
+  process.once("SIGINT", shutdown)
+}

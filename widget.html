@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>oc-dash widget</title>
+    <!-- index.html minus the pre-paint theme script. The widget
+         has no theme control (the panel is 340x420), so it follows the OS
+         through the prefers-color-scheme media query in widget.css and sets
+         no data-theme attribute. Dropping the script also means it never
+         reads the dashboard's stored choice out of localStorage, so a
+         "dark" choice made in the full dashboard does not pin the widget. -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/widget.tsx"></script>
+  </body>
+</html>

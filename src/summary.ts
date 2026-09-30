@@ -26,7 +26,7 @@ export function rangeLabel(range: Range): string {
 }
 
 /**
- * Mission 008 (007's F1): the hero's label must come from the same payload
+ * The hero's label must come from the same payload
  * as its value, so the page's primary answer never shows one range's number
  * under another range's label. The label therefore tracks the payload that
  * fed the KPIs — the stats summary when it is healthy, otherwise the session
@@ -46,7 +46,7 @@ export function heroRange(
 }
 
 /**
- * Mission 008 (007's F2): the Today chart's accent date, derived from the
+ * The Today chart's accent date, derived from the
  * summary payload's own preset instead of the active range state. A stale
  * non-today payload can be on screen right after a switch to Today; gating
  * on the payload keeps the accent matched to the chart's own data (a stale
@@ -196,15 +196,15 @@ export function kpisFromFallback(totals: FallbackTotals): Kpis {
 }
 
 /**
- * Mission 014 (PD): pure logic for the filtered-totals card. The component
- * stays presentational; everything the probes and tests can pin lives here.
+ * Pure logic for the filtered-totals card. The component
+ * stays presentational; everything the tests can pin lives here.
  */
 
 /** The card's content tier: tier 2 (project stats) or tier 1 (rows only). */
 export type FilterCardTier = "tier2" | "tier1"
 
 /**
- * Q4a's gating rule: tier 2 needs a project filter and must NOT have a
+ * The gating rule: tier 2 needs a project filter and must NOT have a
  * model filter — upstream has no model param, so the project-scoped stats
  * could not honor the model cut. Both filters active degrades to tier 1.
  */
@@ -214,9 +214,9 @@ export function filterCardTier(directory: string, model: string): FilterCardTier
 
 /**
  * The project ids upstream stats counts for a directory filter. Rows carry
- * projectID; Mission 026: ALL distinct ids behind the directory come back,
- * ordered count-desc with first-seen kept on ties (so index 0 is the id the
- * pre-026 single-pick returned). Empty when the filter matches nothing or
+ * projectID; ALL distinct ids behind the directory come back,
+ * ordered count-desc with first-seen kept on ties (so index 0 is the id a
+ * single-pick would return). Empty when the filter matches nothing or
  * rows carry no projectID — the project param is then not sent at all.
  */
 export function projectIDForDirectory(rows: SessionInfo[], directory: string): string[] {
@@ -237,10 +237,10 @@ export function projectIDForDirectory(rows: SessionInfo[], directory: string): s
 /**
  * The card header's filter descriptor, per the artifact mocks: the project's
  * basename ("oc-setup"), the model's short id form without the variant (the
- * model filter state is the base "providerID/id" since mission 019, and the
+ * model filter state is the base "providerID/id", and the
  * short-form convention drops the provider prefix; the artifact's card label
  * is not provider-prefixed), "no model" for the no-model bucket. Empty when
- * no filter is set. Mission 044: the model part becomes the /api/model
+ * no filter is set. The model part becomes the /api/model
  * display name when the map has it, the short id otherwise.
  */
 export function filterCardLabel(directory: string, model: string, names?: ModelNames): string {
@@ -252,7 +252,7 @@ export function filterCardLabel(directory: string, model: string, names?: ModelN
 
 /**
  * Label protection for the card, copied from the hero's mechanism
- * (heroRange, 008's F1): the card's numbers come from the session rows, so
+ * (heroRange): the card's numbers come from the session rows, so
  * its range label tracks the session payload's own preset and only falls
  * back to the active range when no payload is on screen.
  */
@@ -261,7 +261,7 @@ export function cardRange(sessions: SessionsPayload | null | undefined, active: 
 }
 
 /**
- * Mission 014: the tier-2 zeros guard. Upstream answers an unknown project
+ * The tier-2 zeros guard. Upstream answers an unknown project
  * id with an all-zero stats payload rather than an error (verified live),
  * so a project-scoped payload claiming no sessions at all while the walked
  * rows show some is treated as unavailable — the card degrades to tier 1
@@ -277,7 +277,7 @@ export function projectStatsUsable(
 }
 
 /**
- * Mission 026: the filtered card's money, resolved per active filter
+ * The filtered card's money, resolved per active filter
  * combination from the message-level stats engine the hero already rides.
  *
  * - Model filter only: the GLOBAL stats payload's models[] row matching
@@ -285,11 +285,11 @@ export function projectStatsUsable(
  *   directory axis, so the exclusivity cut does not apply here.
  * - Directory filter: per-project stats totals, one payload per project id
  *   behind the directory, costs summed — but ONLY when every id is
- *   exclusive to the directory (mission 028 below).
+ *   exclusive to the directory (the exclusivity cut below).
  * - Directory AND model: the per-project models[] rows, summed across that
  *   directory's project ids, under the same exclusivity gate.
  *
- * Mission 028 (H1): upstream scopes stats by project id, not by directory,
+ * Upstream scopes stats by project id, not by directory,
  * so a payload for an id that also has sessions in another directory
  * carries that other directory's money. An id is EXCLUSIVE to the directory
  * iff every walked row carrying it belongs to the directory. Directory
@@ -390,7 +390,7 @@ export function cardMoney(input: CardMoneyInput): CardMoney {
   // usable payload, or the combination is not served.
   const ids = input.projectIDs
   if (ids.length === 0) return fallback
-  // Mission 028 (H1): the exclusivity cut, before any payload is trusted.
+  // The exclusivity cut, before any payload is trusted.
   // A truncated walk (or no walk payload at all, so the truncation flag is
   // not visible) counts as non-exclusive: the id set itself could be
   // incomplete and the walked rows are not the whole story.
@@ -436,7 +436,7 @@ export function cardMoney(input: CardMoneyInput): CardMoney {
 }
 
 /**
- * Mission 028 (M1): the card's money sub-line. Every note must be TRUE of
+ * The card's money sub-line. Every note must be TRUE of
  * the number it accompanies. Stats money is message-level: it excludes
  * compaction usage and never sees the session rows' upstream cost drift.
  * The row sum is directory-correct but session-level: it includes
@@ -451,7 +451,7 @@ export function moneySubLine(money: CardMoney, model: string): string {
 }
 
 /**
- * Mission 028 (M1): the money clause for the card's note paragraphs, same
+ * The money clause for the card's note paragraphs, same
  * discipline as moneySubLine — true of the number it accompanies, on every
  * path.
  */

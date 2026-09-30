@@ -103,7 +103,7 @@ export function buildTree(sessions: SessionInfo[]): SessionNode[] {
 }
 
 /**
- * Mission 058: the sortable Sessions columns. Each key maps to the value its
+ * The sortable Sessions columns. Each key maps to the value its
  * column displays — Own cost -> `ownCost`, Incl. subagents -> `inclCost`,
  * Tokens -> `ownTokens`. `inclTokens` only rides along in a parent's
  * sub-line, so it is deliberately not a basis.
@@ -123,7 +123,7 @@ const SORT_VALUE: Record<SortKey, (n: SessionNode) => number> = {
 }
 
 /**
- * Mission 058: one header activation's transition — default -> ascending ->
+ * One header activation's transition — default -> ascending ->
  * descending -> default. A different column starts at ascending, which also
  * returns the previous column to default (the state holds one column).
  */
@@ -143,7 +143,7 @@ function compareUpdated(a: SessionNode, b: SessionNode): number {
 }
 
 /**
- * Mission 058: the Sessions table's column sort. `null` state returns the
+ * The Sessions table's column sort. `null` state returns the
  * post-filter tree untouched — the default base (input) order. Otherwise
  * roots and siblings at every level order by the chosen column's displayed
  * value, ascending or descending, with `time.updated` descending as the

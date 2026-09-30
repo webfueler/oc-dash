@@ -17,7 +17,7 @@ vi.mock("@opencode/client", () => ({
 // getOpencode caches its result at module level, so every test gets a
 // fresh module instance.
 async function freshModule() {
-  return await import("./opencode.js")
+  return await import("../../server/opencode.js")
 }
 
 describe("getOpencode service policy", () => {

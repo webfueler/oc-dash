@@ -20,9 +20,9 @@ export function SessionsTable({
   nodes: SessionNode[]
   expanded: ReadonlySet<string>
   onToggle: (id: string) => void
-  /** Mission 044: providerID/id -> display name; missing keys keep the raw id. */
+  /** providerID/id -> display name; missing keys keep the raw id. */
   names?: ModelNames
-  /** Mission 058: the active column sort; `null` is the default order. */
+  /** The active column sort; `null` is the default order. */
   sort: SortState | null
   onSort: (key: SortKey) => void
 }) {
@@ -47,7 +47,7 @@ export function SessionsTable({
 }
 
 /**
- * Mission 058: an interactive column header. A real button keeps the header
+ * An interactive column header. A real button keeps the header
  * keyboard operable; `aria-sort` and the arrow carry the active direction,
  * and activating cycles the column (the transition lives in tree.ts).
  */
@@ -104,7 +104,7 @@ function row(
   const isOpen = hasChildren && expanded.has(s.id)
   const indent = 34 + Math.max(0, depth - 1) * 18
   const model = s.model
-  // Mission 044: the visible chip is the /api/model display name (the raw id
+  // The visible chip is the /api/model display name (the raw id
   // when the map has no entry — today's exact label); the hover title keeps
   // the raw provider/id and variant reachable.
   const fullModel = model

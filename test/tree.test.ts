@@ -1,17 +1,7 @@
 import { describe, expect, it } from "vitest"
-import type { SessionInfo, TokenUsage } from "./api"
-import { allParentIds, buildTree, nextSortState, sortNodes, tokenTotal, type SessionNode } from "./tree"
-
-export function sess(partial: Partial<SessionInfo> & { id: string }): SessionInfo {
-  return {
-    projectID: "proj",
-    cost: 0,
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    time: { created: 0, updated: 0 },
-    location: { directory: "/tmp/proj" },
-    ...partial,
-  }
-}
+import type { TokenUsage } from "../src/api"
+import { allParentIds, buildTree, nextSortState, sortNodes, tokenTotal, type SessionNode } from "../src/tree"
+import { sess } from "./testFixtures"
 
 describe("tokenTotal", () => {
   it("sums every bucket including cache read and write", () => {
@@ -179,7 +169,7 @@ const idsOf = (nodes: SessionNode[]): string[] => {
 
 describe("sortNodes", () => {
   /**
-   * Mission 058: the fixture separates all three keys — own, incl, and
+   * The fixture separates all three keys — own, incl, and
    * tokens orders all differ — and `a`'s subagent carries tokens so the
    * token basis cannot be swapped for the `inclTokens` rollup (100 vs 1100).
    *   ownCost:   a=1  < c=3  < b=5

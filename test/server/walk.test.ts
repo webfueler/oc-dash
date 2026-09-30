@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { MAX_PAGES, walkSessions, type FetchPage, type RawPage } from "./walk.js"
+import { MAX_PAGES, walkSessions, type FetchPage, type RawPage } from "../../server/walk.js"
 
 function row(id: string, updated: number): unknown {
   return { id, time: { created: updated - 1000, updated } }

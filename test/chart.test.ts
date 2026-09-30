@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import type { ActivityDay } from "./api"
-import { barLayout, chartData, fillDays } from "./chart"
+import type { ActivityDay } from "../src/api"
+import { barLayout, chartData, fillDays } from "../src/chart"
 
 const W = 720
 const H = 160

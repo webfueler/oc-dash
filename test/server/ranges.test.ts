@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { contextStatsRange, parseProjectParam, resolveRange } from "./ranges.js"
+import { contextStatsRange, parseProjectParam, resolveRange } from "../../server/ranges.js"
 
 describe("contextStatsRange", () => {
   it("gives Today the trailing 7 days as chart context", () => {
@@ -19,7 +19,7 @@ describe("contextStatsRange", () => {
   })
 })
 
-// Mission 014 (PD Q4a) + 026: the additive project pass-through's parsing.
+// The additive project pass-through's parsing.
 describe("parseProjectParam", () => {
   it("keeps a plain project id, as a one-element list", () => {
     expect(parseProjectParam("oc-setup")).toEqual(["oc-setup"])
@@ -37,18 +37,18 @@ describe("parseProjectParam", () => {
   })
 
   it("rejects overlong junk instead of truncating into a wrong id", () => {
-    // Mission 028 (L1): the cap is 4096 chars — the old 200 predated id
+    // The cap is 4096 chars — the old 200 predated id
     // lists and would reject five real 40-hex ids plus separators.
     expect(parseProjectParam("x".repeat(4097))).toBeUndefined()
     expect(parseProjectParam("x".repeat(4096))).toEqual(["x".repeat(4096)])
   })
 
-  it("accepts a realistic long id list (mission 028 L1)", () => {
+  it("accepts a realistic long id list", () => {
     const five = Array.from({ length: 5 }, (_, i) => `${i}`.repeat(40)).join(",")
     expect(parseProjectParam(five)).toHaveLength(5)
   })
 
-  it("splits a comma-separated list, trimming and deduping in order (mission 026)", () => {
+  it("splits a comma-separated list, trimming and deduping in order", () => {
     expect(parseProjectParam("p1,p2")).toEqual(["p1", "p2"])
     expect(parseProjectParam(" p1 , p2 ,p1")).toEqual(["p1", "p2"])
   })

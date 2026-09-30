@@ -1,5 +1,5 @@
 /**
- * Mission 014: plain x.y.z comparison, no semver dependency. Numeric
+ * Plain x.y.z comparison, no semver dependency. Numeric
  * segments, missing segments count as zero. Returns -1, 0, or 1 (older,
  * equal, newer).
  */

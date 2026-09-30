@@ -1,7 +1,7 @@
 import type { ModelNames, ModelRef, SessionInfo } from "./api"
 
 /**
- * Mission 013 (PA/PC): pure option derivation and filter composition for the
+ * Pure option derivation and filter composition for the
  * filter-row comboboxes. FilterCombobox owns the rendering; this module keeps
  * the testable logic — option lists derived from session rows, the hidden
  * full-path search match, and the directory AND model composition that runs
@@ -17,7 +17,7 @@ export interface DirectoryOption {
 
 /**
  * Count sessions per directory over the rows, count-desc — the extracted
- * form of the old `directories` memo (App.tsx:82-89).
+ * form of the old `directories` memo.
  */
 export function directoryOptions(rows: SessionInfo[]): DirectoryOption[] {
   const counts = new Map<string, number>()
@@ -32,7 +32,7 @@ export function directoryOptions(rows: SessionInfo[]): DirectoryOption[] {
 
 /**
  * The base model identity: "providerID/id" with the reasoning level (the
- * variant) dropped. Mission 019: the model FILTER ignores the variant, so
+ * variant) dropped. The model FILTER ignores the variant, so
  * both the option keys and applyFilters' match work on this base.
  */
 export function modelBaseKey(m: ModelRef): string {
@@ -49,7 +49,7 @@ export function modelShortLabel(key: string): string {
 }
 
 /**
- * Mission 044: the visible model label — the /api/model display name when
+ * The visible model label — the /api/model display name when
  * the map has it, otherwise the existing short-form convention (raw id,
  * provider dropped). The mapping never changes a key, a count, or a match.
  */
@@ -82,8 +82,8 @@ export interface ModelOption {
 
 /**
  * Count the BASE models over the rows, count-desc, with the no-model rows
- * kept as one explicit bucket (Q3a) so the failed "(untitled)" row stays
- * reachable instead of silently dropping out. Mission 019: variants of one
+ * kept as one explicit bucket so the failed "(untitled)" row stays
+ * reachable instead of silently dropping out. Variants of one
  * model collapse into a single bucket with summed counts.
  */
 export function modelOptions(rows: SessionInfo[], names?: ModelNames): ModelOption[] {
@@ -144,11 +144,11 @@ export function projectComboOptions(rows: SessionInfo[], allCount: number): Comb
 
 /**
  * Model combobox options: All first, then the base models plus the no-model
- * bucket. Mission 019: the label is the short id (the closed chip's
+ * bucket. The label is the short id (the closed chip's
  * short-form convention), the full base "providerID/id" rides along as the
  * detail and the search text, so the provider prefix stays visible when open
  * and searchable when typed — the same visible-short/hidden-full split the
- * project options use. Mission 044: the label becomes the /api/model display
+ * project options use. The label becomes the /api/model display
  * name when the map has it; the key, the detail, and the filter semantics
  * stay the base "providerID/id", and the name joins the search text so the
  * visible label is also findable.
@@ -173,9 +173,9 @@ export function modelComboOptions(
 }
 
 /**
- * Mission 020 (always-visible filters): the comboboxes render in every range,
+ * The comboboxes render in every range,
  * so a value picked under one range can face rows where it matches nothing —
- * the Captain's case: a project selected in 7d stays selected under Today,
+ * a project selected in 7d stays selected under Today,
  * where the walk has no row for it. The option builders above only see the
  * current rows, so the held value would have no option row and the closed
  * chip would fall back to the raw internal key (a full filesystem path, a
@@ -206,7 +206,7 @@ export function staleProjectOption(path: string): ComboOption {
   }
 }
 
-/** The missing model option: the 019 short-form chip, count 0 (044: the display name when mapped). */
+/** The missing model option: the short-form chip, count 0 (the display name when mapped). */
 export function staleModelOption(key: string, names?: ModelNames): ComboOption {
   const noModel = key === NO_MODEL_KEY
   return {
@@ -236,7 +236,7 @@ export function applyFilters(
   if (directory) out = out.filter((s) => s.location?.directory === directory)
   if (model)
     out = out.filter((s) =>
-      // Mission 019: the match is variant-agnostic — a base "providerID/id"
+      // The match is variant-agnostic — a base "providerID/id"
       // filter selects every reasoning level of that model.
       model === NO_MODEL_KEY ? !s.model : !!s.model && modelBaseKey(s.model) === model,
     )

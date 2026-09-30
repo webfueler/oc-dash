@@ -13,12 +13,12 @@
   --money: #7ee2a8;
 }
 
-/* Mission 015 (PB): the light tokens lift out of the media query. Forced
+/* The light tokens lift out of the media query. Forced
    light applies them via [data-theme='light'] (color-scheme flips with
    them so UA form controls and scrollbars follow); the media query below
    re-gates to :root:not([data-theme]) so system mode keeps following the
    OS with no attribute set, and forced dark is never fought by it. The
-   token values themselves moved, not changed (011's light ground truth). */
+   token values themselves moved, not changed. */
 :root[data-theme="light"] {
   color-scheme: light;
   --bg: #f6f8fa;
@@ -158,7 +158,7 @@ h2 {
   flex: none;
 }
 
-/* Mission 014: the dismissible update notice. Same bar language as .health,
+/* The dismissible update notice. Same bar language as .health,
    accented so it reads as an action prompt; tokens only, so both themes
    need no extra block. */
 .update-notice {
@@ -356,7 +356,7 @@ section {
   flex-wrap: wrap;
 }
 
-/* Mission 023: the filter row's fixed slot, between the KPI hero and the
+/* The filter row's fixed slot, between the KPI hero and the
    conditional filtered card. Same flex vocabulary as .section-tools and the
    20px rhythm of .kpis/.fcard, so the gap holds whether the card is present
    or not and the row never moves when a filter is picked or cleared. */
@@ -423,7 +423,7 @@ th.num {
   font-variant-numeric: tabular-nums;
 }
 
-/* Mission 058: the sortable Sessions column headers. The button inherits the
+/* The sortable Sessions column headers. The button inherits the
    th's uppercase dim type, carries the pointer and hover cue, and the arrow
    marks the active direction. */
 th .sort-th {
@@ -594,7 +594,7 @@ tr:focus-visible {
   margin-bottom: 4px;
 }
 
-/* Mission 013 (PA/PC): filter-row combobox. Additive styles only; the same
+/* Filter-row combobox. Additive styles only; the same
    panel language and tokens as the select it replaced, tabular-nums counts. */
 .cb {
   position: relative;
@@ -706,7 +706,7 @@ tr:focus-visible {
   color: var(--dim);
 }
 
-/* Mission 015 (PB): the light listbox shadow follows the theme, not just
+/* The light listbox shadow follows the theme, not just
    the OS setting — forced light keeps it, forced dark never gets it,
    exactly like the token blocks above. */
 :root[data-theme="light"] .cb .list {
@@ -719,7 +719,7 @@ tr:focus-visible {
   }
 }
 
-/* Mission 014 (PD): the filtered-totals card. Reuses the hero's own label,
+/* The filtered-totals card. Reuses the hero's own label,
    value, sub, and statline vocabulary; the accent border and the dashed
    note follow the artifact's fcard/note mocks. Tokens only, so light mode
    needs no extra block. */

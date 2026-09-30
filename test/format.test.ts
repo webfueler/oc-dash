@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isoDate, outcomeView } from "./format"
+import { isoDate, outcomeView } from "../src/format"
 
 describe("outcomeView", () => {
   it("collapses successes to a dim check", () => {

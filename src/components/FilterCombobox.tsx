@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react"
 import type { ComboOption } from "../filters"
 
 /**
- * Mission 013 (PA/PC): lightweight combobox for the filter row — a text input
+ * Lightweight combobox for the filter row — a text input
  * opening a filtered listbox, hand-rolled per the ARIA combobox/listbox
  * pattern (role, aria-expanded, aria-activedescendant, arrows/enter/escape).
  * Closed, it reads like the native select it replaced: the selected option

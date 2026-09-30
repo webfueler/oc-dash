@@ -1,5 +1,5 @@
 /**
- * Mission 015 (PB): the theme state machine, extracted so the mechanics are
+ * The theme state machine, extracted so the mechanics are
  * unit-testable. The pre-paint script in index.html applies the stored
  * choice before first paint; this module is the React side — normalize what
  * is stored, apply/clear the attribute live, persist on change.
