@@ -98,7 +98,7 @@ export function App() {
 
   const refresh = useCallback(async () => {
     const [r1, r2, r3, r4] = await Promise.allSettled([
-      fetchSummary(range, cardProjectsParam || undefined),
+      fetchSummary(range, { project: cardProjectsParam || undefined }),
       fetchSessions(range),
       fetchHealth(),
       fetchModelNames(),

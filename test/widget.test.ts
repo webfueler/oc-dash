@@ -1547,3 +1547,38 @@ describe("WIDGET_START_SENT_TEXT", () => {
     expect(WIDGET_START_SENT_TEXT).toContain("the panel retries")
   })
 })
+
+/**
+ * contextActivity is the dashboard chart's data, not the panel's. The panel
+ * asks the server to skip the Today-only call behind it (the `context: false`
+ * fetch), so this pins the other half: every view-model function that reads a
+ * summary produces the same output with the field as without it.
+ */
+describe("the panel's view model ignores contextActivity", () => {
+  const without = ok(
+    {
+      cost: 12.5,
+      models: [usage(9), usage(3.5)],
+    },
+    "today",
+  )
+  const withContext: SummaryOk = {
+    ...without,
+    contextActivity: [
+      { date: "2026-09-24", steps: 4 },
+      { date: "2026-09-30", steps: 9 },
+    ],
+  }
+
+  it("renders the same hero, strip, models and gap", () => {
+    expect(widgetHero(withContext)).toEqual(widgetHero(without))
+    expect(widgetStats(withContext)).toEqual(widgetStats(without))
+    expect(widgetModels(withContext, undefined)).toEqual(widgetModels(without, undefined))
+    const sessions = widgetSessions(payload([sess({ id: "s1", cost: 5 })], {}, "today"))
+    expect(widgetGap(withContext, sessions)).toEqual(widgetGap(without, sessions))
+    // The strip and the models rows are the two things built from the array
+    // fields; both sides really were rendered, not skipped by an early return.
+    expect(widgetStats(withContext)).not.toBeNull()
+    expect(widgetModels(withContext, undefined).rows).toHaveLength(2)
+  })
+})

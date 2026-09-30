@@ -13,7 +13,7 @@ mutate anything.
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /api/health` | Dashboard version, latest published version, update command, plus the discovered service URL, health, and version |
-| `GET /api/summary?range=today\|7d\|30d\|all` | `session.stats` for the resolved window, with `tools="summary"` and the machine's local IANA timezone. The optional `project=<id[,id...]>` adds one best-effort per-project stats call for each id; successes ride along as `projectStats` |
+| `GET /api/summary?range=today\|7d\|30d\|all` | `session.stats` for the resolved window, with `tools="summary"` and the machine's local IANA timezone. Today adds a second best-effort 7-day stats call whose activity rides along as `contextActivity`, the Activity chart's muted context days; `context=none` skips that call, for callers that render no chart. The optional `project=<id[,id...]>` adds one best-effort per-project stats call for each id; successes ride along as `projectStats` |
 | `GET /api/sessions?range=today\|7d\|30d\|all` | Cursor-paginated `GET /api/session` walk (100 rows per page, capped at 50 pages), windowed by `time.updated >= range start`. Returns `count`, `pages`, and `truncated` |
 | `GET /api/model-names` | `providerID/id` to display-name map from `GET /api/model`. Answers `{ "names": {} }` when the lookup fails |
 

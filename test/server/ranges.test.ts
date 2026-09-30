@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { contextStatsRange, parseProjectParam, resolveRange } from "../../server/ranges.js"
+import {
+  contextStatsRange,
+  parseContextParam,
+  parseProjectParam,
+  resolveRange,
+} from "../../server/ranges.js"
 
 describe("contextStatsRange", () => {
   it("gives Today the trailing 7 days as chart context", () => {
@@ -62,5 +67,22 @@ describe("parseProjectParam", () => {
     expect(parseProjectParam(many)).toBeUndefined()
     const ten = Array.from({ length: 10 }, (_, i) => `p${i}`).join(",")
     expect(parseProjectParam(ten)).toHaveLength(10)
+  })
+})
+
+// The additive opt-out for Today's context call. The default has to keep the
+// call for every caller that does not know about the param.
+describe("parseContextParam", () => {
+  it("turns the context call off only for an exact none", () => {
+    expect(parseContextParam("none")).toBe(false)
+    expect(parseContextParam(" none ")).toBe(false)
+  })
+
+  it("keeps the context call for absent or unknown values", () => {
+    expect(parseContextParam(undefined)).toBe(true)
+    expect(parseContextParam(null)).toBe(true)
+    expect(parseContextParam("")).toBe(true)
+    expect(parseContextParam("full")).toBe(true)
+    expect(parseContextParam("NONE")).toBe(true)
   })
 })

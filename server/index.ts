@@ -5,8 +5,9 @@ import { fileURLToPath } from "node:url"
 import { errorMessage, getOpencode, ocGetJson, type OpencodeContext } from "./opencode.js"
 import { listenHttp } from "./listen.js"
 import { modelNames } from "./models.js"
-import { contextStatsRange, localTimezone, parseProjectParam, parseRangePreset, resolveRange } from "./ranges.js"
+import { localTimezone, parseContextParam, parseProjectParam, parseRangePreset, resolveRange } from "./ranges.js"
 import { removeRegistry, serviceMode, writeRegistry } from "./registry.js"
+import { fetchSummaryBody } from "./summary.js"
 import { compareVersions } from "./version.js"
 import { walkSessions, type RawPage } from "./walk.js"
 
@@ -170,71 +171,23 @@ app.get("/api/summary", async (c) => {
   }
   const range = resolveRange(preset)
   const tz = localTimezone()
-  // Additive project param. When present, one best-effort upstream stats
-  // call per id feeds the filtered card's tier-2 tiles. The calls are
-  // created before the main stats call is awaited, so they run in parallel
-  // with it and the hero's latency is untouched; a failed call resolves to
-  // null and is dropped (the contextActivity pattern), never an error
-  // surface.
+  // Additive params. `project` (comma-separated ids) adds one best-effort
+  // upstream stats call per id for the filtered card's tier-2 tiles;
+  // `context=none` is the panel's explicit opt-out from Today's second call,
+  // whose activity only the dashboard's chart plots. The calls themselves,
+  // the ordering that keeps the extras alongside the main one, and the shape
+  // checks live in summary.ts; this route binds them to the discovered
+  // client and turns the result into the HTTP payload.
   const project = parseProjectParam(c.req.query("project")) ?? []
+  const context = parseContextParam(c.req.query("context"))
   try {
     const oc = await getOpencode()
-    // One best-effort upstream stats call per project id behind the
-    // directory filter, all started before the main call is awaited so the
-    // hero's latency is untouched. A failed call drops out of the list; the
-    // field is omitted when none succeed (never an error surface).
-    const projectCalls = project.map((id) => statsCall(oc, range, tz, id).catch(() => null))
-    const raw = await statsCall(oc, range, tz)
-    // The promise client returns SessionStatsInfo directly; a raw fetch
-    // returns { data: SessionStatsInfo }. Normalize both.
-    const data = (raw as { data?: unknown })?.data ?? raw
-    if (
-      !data ||
-      typeof data !== "object" ||
-      typeof (data as { cost?: unknown }).cost !== "number" ||
-      !Array.isArray((data as { models?: unknown }).models)
-    ) {
-      throw new Error("unexpected /api/session/stats payload shape")
-    }
-    const projectStats: { project: string; data: unknown }[] = []
-    if (projectCalls.length > 0) {
-      const settled = await Promise.all(projectCalls)
-      for (let i = 0; i < settled.length; i++) {
-        const pRaw = settled[i]
-        const pData = (pRaw as { data?: unknown } | null)?.data ?? pRaw
-        if (
-          pData &&
-          typeof pData === "object" &&
-          typeof (pData as { cost?: unknown }).cost === "number"
-        ) {
-          // The project id rides along so the client can verify the field
-          // belongs to the filter currently on screen before trusting it.
-          projectStats.push({ project: project[i], data: pData })
-        }
-      }
-    }
-    // Additive, Today-only: trailing 7 days of activity so the chart can
-    // render the in-range day next to muted context days. Created after the
-    // main stats call has been awaited, so it adds a second, serial upstream
-    // round-trip on Today. Still best effort: a failed context call resolves
-    // to undefined and the field is omitted.
-    let contextActivity: unknown
-    const ctxRange = contextStatsRange(preset)
-    const ctxCall = ctxRange ? statsCall(oc, ctxRange, tz).catch(() => undefined) : undefined
-    if (ctxCall) {
-      const ctxRaw = await ctxCall
-      const ctxData = (ctxRaw as { data?: unknown } | null)?.data ?? ctxRaw
-      const act = (ctxData as { activity?: unknown } | null)?.activity
-      if (Array.isArray(act)) contextActivity = act
-    }
-    return c.json({
-      degraded: false,
+    const body = await fetchSummaryBody((r, id) => statsCall(oc, r, tz, id), {
       range,
-      timezone: tz,
-      data,
-      ...(contextActivity !== undefined ? { contextActivity } : {}),
-      ...(projectStats.length > 0 ? { projectStats } : {}),
+      project,
+      context,
     })
+    return c.json({ degraded: false, range, timezone: tz, ...body })
   } catch (err) {
     // Degraded marker instead of an error page when stats are unavailable.
     return c.json({ degraded: true, range, timezone: tz, reason: errorMessage(err) })

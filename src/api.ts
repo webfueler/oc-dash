@@ -142,15 +142,33 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 /**
- * Optional project pass-through. The
- * param carries a comma-separated list of project ids (all the ids behind
- * the directory filter). Existing callers are unaffected — the param is
- * sent only while the card wants project-scoped stats, and /api/summary
- * without it returns exactly the same keys as before.
+ * Additive, optional arguments for /api/summary. Both keep the payload
+ * every existing caller gets unless they are explicitly set: `project`
+ * only ever adds the per-project field, and `context` defaults to on.
  */
-export function fetchSummary(range: Range, project?: string): Promise<SummaryResponse> {
-  const suffix = project ? `&project=${encodeURIComponent(project)}` : ""
-  return getJson(`/api/summary?range=${range}${suffix}`)
+export interface SummaryOptions {
+  /**
+   * Comma-separated project ids for the filtered card. The param is sent
+   * only while the card wants project-scoped stats, so callers that do not
+   * pass it request exactly the same keys as before.
+   */
+  project?: string
+  /**
+   * false asks the server to skip the Today-only trailing-7-day stats call
+   * that feeds `contextActivity`. The compact panel passes it because it
+   * renders no chart; the dashboard leaves it on and its Activity chart
+   * plots the field. Absent means on.
+   */
+  context?: boolean
+}
+
+export function fetchSummary(
+  range: Range,
+  options: SummaryOptions = {},
+): Promise<SummaryResponse> {
+  const project = options.project ? `&project=${encodeURIComponent(options.project)}` : ""
+  const context = options.context === false ? "&context=none" : ""
+  return getJson(`/api/summary?range=${range}${project}${context}`)
 }
 
 export function fetchSessions(range: Range): Promise<SessionsPayload> {

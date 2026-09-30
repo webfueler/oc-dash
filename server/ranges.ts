@@ -68,3 +68,14 @@ export function parseProjectParam(value: string | undefined | null): string[] | 
   if (ids.length === 0 || ids.length > 10) return undefined
   return ids
 }
+
+/**
+ * Whether /api/summary should make Today's second stats call, whose activity
+ * feeds only the dashboard's chart. `context=none` is the whole opt-out and
+ * the compact panel is the only caller that sends it; an absent param, or
+ * anything else, keeps the call, because the default has to stay the payload
+ * every existing caller already gets.
+ */
+export function parseContextParam(value: string | undefined | null): boolean {
+  return value?.trim() !== "none"
+}

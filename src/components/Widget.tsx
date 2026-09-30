@@ -178,7 +178,10 @@ export function Widget() {
     const mine = ++seq.current
     const now = Date.now()
     const [r1, r2, r3] = await Promise.allSettled([
-      fetchSummary(range),
+      // The panel renders no chart, so it opts out of the Today-only
+      // trailing-7-day call that feeds the dashboard's contextActivity: one
+      // upstream round trip per poll instead of two.
+      fetchSummary(range, { context: false }),
       fetchSessions(range),
       fetchModelNames(),
     ])
