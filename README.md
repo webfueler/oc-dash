@@ -36,6 +36,11 @@ then the sessions table, the models table, and an activity chart.
   fallback include it, so the two totals can differ.
 - Costs are list-price estimates from models.dev, not your bill, and models
   that burn tokens at zero reported cost are undercounted.
+- Money is formatted one way everywhere: two decimals, `$0.45`; a genuine
+  zero prints `$0.00`; a non-zero amount under one cent prints `<$0.01`
+  (`<-$0.01` for a credit) rather than rounding to a false `$0.00`. The
+  dashboard and the panel share one formatter, so the same figure reads the
+  same on both.
 
 ## Quick start
 
@@ -44,18 +49,67 @@ compatible 2.0.x line. oc-dash only issues read-only GETs and never starts,
 stops, or restarts the service.
 
 ```sh
-npx @webfueler/oc-dash
+npx @webfueler/oc-dash@latest server start
 ```
 
-Serves the dashboard on http://localhost:4021. Override the port with `PORT`,
-for example `PORT=4022 npx @webfueler/oc-dash`.
+`server start` starts the dashboard in the background, prints the URL and pid
+it landed on, and returns to the prompt. Open the URL, `http://127.0.0.1:4021`
+by default. `npx @webfueler/oc-dash@latest server status` reports where it is,
+and `npx @webfueler/oc-dash@latest server stop` shuts it down. A background
+server is an ordinary process: it ends when you log out and does not come back
+after a reboot.
 
-When no registered service answers the startup probe, oc-dash prints a short
-message and exits non-zero. Start the service with `opencode2 serve --service`.
+`--port <n>` picks the port to try, ahead of the `PORT` environment variable,
+ahead of 4021. When that port is busy the server takes a free port from the
+kernel and records where it landed, so read the real URL from `server status`
+instead of assuming it. `server start --foreground` keeps it in the terminal
+rather than detaching.
+
+Bare `npx @webfueler/oc-dash@latest` prints the help and exits 0, and so does
+`--help`; `npx @webfueler/oc-dash@latest --version` prints the version and
+exits 0. The bare command used to start a server in the foreground. If a shell
+alias, a script or a Makefile still says `npx oc-dash`, replace it with the
+`server start` command shown above; what it does now is print help, start
+nothing, and exit 0, with no error.
+
+Exit codes, the same through `npx @webfueler/oc-dash@latest` or a global
+install:
+
+| Invocation | Exit |
+| --- | --- |
+| no arguments, `--help`, `help` | 0 |
+| `--version` | 0 |
+| `server start` (the server started) | 0 |
+| `server status` (a server is running) | 0 |
+| `server stop` (it stopped one) | 0 |
+| `server status` / `server stop` (nothing running) | 1 |
+| unknown command or flag, unusable `--port`, `--port` with no subcommand | 1 |
+| `server start` (already running, or it could not start), `server stop` (it refused to signal) | 1 |
+
+Errors go to stderr and exit 1; help and results go to stdout. `server status`
+and `server stop` exit 1 on "not running" because they are predicates a script
+branches on:
+
+```sh
+npx @webfueler/oc-dash@latest server status >/dev/null && echo up
+```
+
+`server start` records the port, pid, URL and version in the registry file at
+`$XDG_STATE_HOME/oc-dash/service.json`, or at
+`~/.local/state/oc-dash/service.json` when `XDG_STATE_HOME` is unset. Both
+`server status` and `server stop` read it back, and so does the
+[oc-dashbar](https://github.com/webfueler/oc-dashbar) menu bar app, a sibling
+project that loads the compact panel this server serves at `/widget`.
+[docs/API.md](https://github.com/webfueler/oc-dash/blob/main/docs/API.md)
+covers the file, the route and the panel's own resolution order.
+
+When no registered service answers the startup probe, the server exits and
+`server start` reports that it exited before it finished starting. Start the
+service with `opencode2 serve --service`.
 
 No opencode2 yet? Install it with `npm install -g @opencode/cli`; it puts
 the `opencode2` command on your PATH. Exact money needs the stats route,
-which the 2.0.x line serves. To skip `npx`, `npm i -g @webfueler/oc-dash`
+which the 2.0.x line serves. To skip `npx`, `npm i -g @webfueler/oc-dash@latest`
 puts `oc-dash` on your PATH.
 
 ## Using the dashboard
@@ -93,8 +147,8 @@ the tab is visible, and right away when it becomes visible again.
   dashboard warns and a directory filter falls back to the approximate row sum.
 - The service endpoint is discovered once and cached. If the service comes
   back on a new port, restart the dashboard.
-- Without a healthy service at startup, oc-dash exits. It never starts or
-  restarts one.
+- Without a healthy service at startup, the server exits and `server start`
+  says so. It never starts or restarts one.
 
 ## Development
 
