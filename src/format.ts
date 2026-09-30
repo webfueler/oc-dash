@@ -1,14 +1,27 @@
-/** USD via Intl; small values get up to 4 decimals so sub-cent costs read. */
+/**
+ * The project's one money formatter. The dashboard and the panel both call
+ * it, so a cost reads identically in both surfaces.
+ *
+ * The rule, picked by hand in the panel's design review and now shared:
+ * exactly two decimals; a genuine zero prints `$0.00`; a non-zero amount
+ * under one cent prints `<$0.01` (`<-$0.01` for a credit) rather than
+ * rounding to `$0.00`, which would read as free.
+ */
+const USD = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
 export function fmtUSD(n: number): string {
   if (!Number.isFinite(n)) return "—"
+  // `n === 0` rather than `abs < 0.01`, so a genuine zero and a negative
+  // zero both land on "$0.00".
+  if (n === 0) return "$0.00"
   const abs = Math.abs(n)
-  const max = abs > 0 && abs < 1 ? 4 : 2
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: max,
-  }).format(n)
+  if (abs < 0.01) return n < 0 ? "<-$0.01" : "<$0.01"
+  return USD.format(n)
 }
 
 /** K/M/B token formatting. */

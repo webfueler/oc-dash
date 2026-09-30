@@ -10,6 +10,7 @@ import type {
   TokenUsage,
 } from "../src/api"
 import { sess } from "./testFixtures"
+import { fmtUSD } from "../src/format"
 import {
   MODELS_HEAD_TITLE,
   WIDGET_MODEL_ROWS,
@@ -136,6 +137,13 @@ function round1(n: number): number {
 }
 
 describe("fmtMoney", () => {
+  it("is the shared formatter, not a second implementation", () => {
+    // Mission 089's whole shape: the panel's money IS the dashboard's money.
+    // Identity, not equality, so reintroducing a parallel function fails here
+    // even if the two happen to agree on the day.
+    expect(fmtMoney).toBe(fmtUSD)
+  })
+
   it("prints exactly two decimals at every magnitude", () => {
     expect(fmtMoney(0)).toBe("$0.00")
     expect(fmtMoney(9.5)).toBe("$9.50")
@@ -146,9 +154,8 @@ describe("fmtMoney", () => {
   })
 
   it("bounds a real sub-cent amount instead of rounding it to nothing", () => {
-    // Annotation 7's whole point. fmtUSD's 4-decimal rule printed $0.0001,
-    // and a plain 2-decimal cap would print $0.00, which reads as free. The
-    // bound is not a claim and says so.
+    // The sub-cent bound, now the shared rule. A plain 2-decimal cap would
+    // print $0.00, which reads as free. The bound is not a claim and says so.
     expect(fmtMoney(0.0001)).toBe("<$0.01")
     expect(fmtMoney(0.0023)).toBe("<$0.01")
     expect(fmtMoney(0.009999)).toBe("<$0.01")
@@ -162,7 +169,7 @@ describe("fmtMoney", () => {
     expect(fmtMoney(0.0042)).not.toBe(fmtMoney(0))
   })
 
-  it("rounds at the cent, which is the precision being traded away", () => {
+  it("rounds at the cent, the precision both surfaces now share", () => {
     expect(fmtMoney(0.4454)).toBe("$0.45")
     expect(fmtMoney(0.0558)).toBe("$0.06")
     expect(fmtMoney(0.0889)).toBe("$0.09")
@@ -176,14 +183,16 @@ describe("fmtMoney", () => {
     expect(fmtMoney(-1.5)).toBe("-$1.50")
   })
 
-  it("dashes a figure that is not a number, as fmtUSD does", () => {
+  it("dashes a figure that is not a number", () => {
     expect(fmtMoney(Number.NaN)).toBe("—")
     expect(fmtMoney(Number.POSITIVE_INFINITY)).toBe("—")
   })
 
   it("is narrower than the four-decimal string it replaces, not wider", () => {
-    // The cap cannot make the money column overflow what it sized for.
+    // The cap cannot make a money column overflow what it sized for. The
+    // signed bound is the longest string the rule can produce below a cent.
     expect("<$0.01".length).toBeLessThanOrEqual("$0.4454".length)
+    expect("<-$0.01".length).toBeLessThanOrEqual("$0.4454".length)
   })
 })
 
@@ -220,8 +229,8 @@ describe("widgetHero", () => {
   })
 
   it("bounds a sub-cent hero cost rather than printing a four-decimal figure", () => {
-    // fmtUSD's 4-decimal rule would read "$0.0042" here. The panel's own
-    // formatter reads "<$0.01" and the assertion says why.
+    // The four-decimal "0.0042" is gone from both surfaces; the shared rule
+    // reads "<$0.01" and the assertion says why.
     expect(widgetHero(ok({ cost: 0.0042 })).cost).toBe("<$0.01")
   })
 
@@ -583,9 +592,10 @@ describe("widgetSessions", () => {
     const view = widgetSessions(payload([orphan, sess({ id: "other", cost: 0.01 })]))
     expect(view.rows.map((r) => r.id)).toEqual(["orphan", "other"])
     expect(view.rows[0].cost).toBe(0.157922568)
-    // fmtMoney, not fmtUSD. $0.157922568 is a fraction of a cent over, so
-    // fmtUSD printed "$0.1579" and the panel now prints "$0.16". The
-    // `<$0.01` bound is exercised by other real rows; this one is not sub-cent.
+    // The shared formatter, both surfaces. $0.157922568 is a fraction of a
+    // cent over, so the four-decimal rule the dashboard used to have printed
+    // "$0.1579" and the shared rule prints "$0.16". The `<$0.01` bound is
+    // exercised by other real rows; this one is not sub-cent.
     expect(view.rows[0].costText).toBe("$0.16")
     expect(view.rows[0].subagents).toBe(0)
   })
@@ -661,12 +671,13 @@ describe("widgetGap", () => {
     const { summary, sessions } = liveToday()
     const gap = widgetGap(summary, sessions)
     expect(gap).not.toBeNull()
-    // The arithmetic is untouched by the formatter change: the delta is the
-    // live figure to nine places.
+    // The arithmetic is untouched by the unification: the delta is the live
+    // figure to nine places.
     expect(gap!.delta).toBeCloseTo(0.158048368, 9)
-    // fmtUSD used to print "$0.158" here, dropping a trailing zero. fmtMoney
-    // rounds the same figure to the same cent, so the string is unchanged on
-    // this particular case and the assertion survives the swap honestly.
+    // The old dashboard rule printed "$0.158" here, dropping the trailing
+    // zero; the shared rule rounds the same figure to the same cent. The
+    // panel's string is unchanged, and the dashboard can no longer drift
+    // from it.
     expect(gap!.amountText).toBe("$0.16")
     expect(gap!.higher).toBe("rows")
     expect(gap!.where).toBe("in session rows, not in the hero")
@@ -717,10 +728,10 @@ describe("widgetGap", () => {
   })
 
   it("bounds a sub-cent gap rather than rounding the disagreement away", () => {
-    // Was "$0.0042" through fmtUSD's 4-decimal rule. Under fmtMoney the same
-    // disagreement is real money smaller than a cent, so it prints as a bound
-    // and stays a claim that something differs rather than a claim of how much
-    // at a precision the panel no longer offers.
+    // Was "$0.0042" through the old dashboard rule. A real disagreement
+    // smaller than a cent now prints as a bound on both surfaces, so it stays
+    // a claim that something differs rather than a claim of how much at a
+    // precision neither surface offers any more.
     const rows = [sess({ id: "a", cost: 0.0042 })]
     const gap = widgetGap(ok({ cost: 0 }), widgetSessions(payload(rows)))
     expect(gap!.amountText).toBe("<$0.01")

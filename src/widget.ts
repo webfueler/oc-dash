@@ -5,7 +5,7 @@ import type {
   SessionsPayload,
   SummaryResponse,
 } from "./api"
-import { fmtInt, fmtTokens, relTime } from "./format"
+import { fmtInt, fmtTokens, fmtUSD, relTime } from "./format"
 import { modelDisplayName } from "./filters"
 import { kpisFromStats, modelRows, rangeLabel, type ModelRow } from "./summary"
 import { buildTree, type SessionNode } from "./tree"
@@ -28,9 +28,9 @@ import { buildTree, type SessionNode } from "./tree"
  * here rather than in the component, because each is a rule with a wrong
  * answer rather than a matter of taste: `widgetAtRange`, which is where the
  * exactness rule lives now that the hero's range label is gone; `fmtMoney`,
- * the panel's own money formatter, which the dashboard deliberately does not
- * share; and the selector's strings, so the segment labels and the sessions
- * header tooltip are pinned by tests rather than by a screenshot.
+ * the panel's name for the shared `fmtUSD`, so the panel and the dashboard
+ * print the same money; and the selector's strings, so the segment labels and
+ * the sessions header tooltip are pinned by tests rather than by a screenshot.
  *
  * The footer took the timestamp off the top strip and
  * put it in one place: `widgetRefreshText` is now the only thing that decides
@@ -59,45 +59,25 @@ export const WIDGET_SESSION_ROWS = 4
 export const WIDGET_MODEL_ROWS = 4
 
 // ---------------------------------------------------------------------------
-// Money, the panel's own formatter
+// Money: the shared formatter, under the panel's own name
 // ---------------------------------------------------------------------------
 
-const PANEL_USD = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-
 /**
- * USD for the panel: always two decimals, with `<$0.01` for a real amount
- * under a cent.
+ * The panel's money, and the dashboard's: an alias of `fmtUSD` in
+ * src/format.ts, the project's one money formatter.
  *
- * This is deliberately NOT `fmtUSD` in `src/format.ts`, which switches to four
- * decimals below $1 and is shared with the full dashboard. The panel formats
- * its own money, and the two disagree on a sub-cent figure on purpose:
- * whether the two surfaces should be unified is an open decision, not an
- * oversight.
- *
- * The bound is the part that matters. Capping at two decimals on its own would
- * turn a real $0.0001 into "$0.00", which reads as free, and that is the exact
- * defect this bound exists to prevent. So a non-zero amount under a
- * cent prints `<$0.01`, a bound and not a claim, and a genuine zero still
- * prints `$0.00` — which is how a reader can tell a free session from a
- * sub-cent one, and the reason the distinction has to survive the cap.
- *
- * `<$0.01` is one character shorter than the `$0.4454` it replaces, so the cap
- * narrows the money column rather than widening it (measured: 66px, unclipped).
+ * It used to be the panel's own function and it deliberately differed from
+ * the dashboard's `fmtUSD`, which switched to four decimals below $1. The
+ * Captain chose this rule by hand during the panel's design review and it is
+ * the one he has seen rendered, so the shared formatter adopted it: two
+ * decimals everywhere, `$0.00` for a genuine zero, and `<$0.01` (`<-$0.01`
+ * for a credit) for a real amount under a cent rather than a rounded
+ * `$0.00` that would read as free. The name stays because the panel's view
+ * model and its tests are written in it, and `test/widget.test.ts` pins
+ * `fmtMoney === fmtUSD` so a second implementation cannot reappear here
+ * without a red test.
  */
-export function fmtMoney(n: number): string {
-  if (!Number.isFinite(n)) return "—"
-  const abs = Math.abs(n)
-  // `n === 0` rather than `abs < 0.01`, so a genuine zero and Intl's "-$0.00"
-  // for a negative zero both land on "$0.00".
-  if (n === 0) return "$0.00"
-  if (abs < 0.01) return n < 0 ? "<-$0.01" : "<$0.01"
-  return PANEL_USD.format(n)
-}
+export const fmtMoney = fmtUSD
 
 // ---------------------------------------------------------------------------
 // The range selector and the payload it labels: one piece of state
