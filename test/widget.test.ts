@@ -14,6 +14,10 @@ import { fmtUSD } from "../src/format"
 import {
   MODELS_HEAD_TITLE,
   WIDGET_MODEL_ROWS,
+  WIDGET_OPEN_ARIA,
+  WIDGET_OPEN_LABEL,
+  WIDGET_OPEN_TARGET_KEY,
+  WIDGET_OPEN_TITLE,
   WIDGET_POLL_MS,
   WIDGET_QUIT_ARM_MS,
   WIDGET_QUIT_ARMED_LABEL,
@@ -34,6 +38,9 @@ import {
   WIDGET_START_SENT_LABEL,
   WIDGET_START_SENT_TEXT,
   WIDGET_START_URL,
+  WIDGET_VIEW_ALL_ARIA,
+  WIDGET_VIEW_ALL_LABEL,
+  WIDGET_VIEW_ALL_MODELS_ARIA,
   fmtMoney,
   gapTitle,
   persistWidgetRange,
@@ -43,10 +50,12 @@ import {
   sharePercents,
   shareText,
   widgetAtRange,
+  widgetDashboardTarget,
   widgetGap,
   widgetHero,
   widgetModels,
   widgetOfflineActions,
+  widgetOpenURL,
   widgetQuitDisarm,
   widgetQuitElapsed,
   widgetQuitExpired,
@@ -1471,6 +1480,114 @@ describe("WIDGET_START_URL", () => {
 
   it("is not http, so an unhandled navigation fails instead of refetching", () => {
     expect(WIDGET_START_URL.startsWith("http")).toBe(false)
+  })
+})
+
+describe("widgetOpenURL", () => {
+  it("is the exact string the shell has to match, with the target encoded once", () => {
+    // Protocol, host and key asserted separately, as for the other two verbs, so a
+    // rename cannot pass as a refactor. The target is the whole absolute URL
+    // percent-encoded once, which encodes the colons and slashes and so leaves a
+    // value that cannot carry a second `&` or a second `?`.
+    expect(widgetOpenURL("http://127.0.0.1:4021/")).toBe(
+      "oc-dash://open?url=http%3A%2F%2F127.0.0.1%3A4021%2F",
+    )
+    const u = new URL(widgetOpenURL("http://127.0.0.1:4021/"))
+    expect(u.protocol).toBe("oc-dash:")
+    expect(u.host).toBe("open")
+    expect(u.pathname).toBe("")
+    expect(u.searchParams.get(WIDGET_OPEN_TARGET_KEY)).toBe("http://127.0.0.1:4021/")
+  })
+
+  it("is a sibling of the other two verbs, sharing the scheme and nothing else", () => {
+    // One mechanism, three verbs, one interception. If the scheme ever diverged
+    // the shell would need three delegate cases, which is the reconciliation the
+    // quit and start URLs already avoided by being written beside each other.
+    const open = widgetOpenURL("http://127.0.0.1:4021/")
+    expect(new URL(open).protocol).toBe(new URL(WIDGET_QUIT_URL).protocol)
+    expect(new URL(open).protocol).toBe(new URL(WIDGET_START_URL).protocol)
+    expect(new URL(open).host).not.toBe(new URL(WIDGET_QUIT_URL).host)
+    expect(new URL(open).host).not.toBe(new URL(WIDGET_START_URL).host)
+    // It is not http, so a shell too old to know the verb fails the navigation
+    // instead of refetching the panel at a URL nothing serves.
+    expect(open.startsWith("http")).toBe(false)
+  })
+
+  it("cannot be talked into carrying a second parameter", () => {
+    // The reason the whole URL is encoded rather than its path. A target that
+    // already holds a query of its own must arrive at the shell as one opaque
+    // value, not as a second key it would then have to allow or deny.
+    const hostile = "http://127.0.0.1:4021/?range=30d&x=1"
+    const url = widgetOpenURL(hostile)
+    // Exactly one `?`, from the prefix, and no `&` at all: the target own query
+    // has been encoded, so it cannot add a key or split the one it is in.
+    expect(url.match(/[?]/g)).toHaveLength(1)
+    expect(url).not.toContain("&")
+    expect(new URL(url).searchParams.getAll(WIDGET_OPEN_TARGET_KEY)).toHaveLength(1)
+    expect(new URL(url).searchParams.get(WIDGET_OPEN_TARGET_KEY)).toBe(hostile)
+  })
+})
+
+describe("widgetDashboardTarget", () => {
+  it("is the origin the panel was served from, with a trailing slash", () => {
+    // The panel is served by the process it is asking about and the dashboard is
+    // that process's own root, so a panel opened against a test port opens that
+    // port's dashboard without a configured URL anywhere.
+    expect(widgetDashboardTarget("http://127.0.0.1:4021")).toBe("http://127.0.0.1:4021/")
+    expect(widgetDashboardTarget("https://localhost:5273")).toBe("https://localhost:5273/")
+  })
+
+  it("refuses anything that is not an http origin rather than emitting it", () => {
+    // Null, not a fallback. An opaque origin is not a dashboard, and handing one
+    // to the shell is the panel asking for something it cannot have; the whole
+    // point of the null is that the caller has to decide what to do about it.
+    for (const bad of ["", "null", "file:///tmp", "about:blank", "data:text/html,x", "127.0.0.1:4021", "http://"]) {
+      expect(widgetDashboardTarget(bad)).toBeNull()
+    }
+  })
+
+  it("refuses an origin carrying a path or a slash, so the target cannot double up", () => {
+    // `window.location.origin` never has either, so this is the belt to the
+    // braces above: an origin that arrived with a slash in it would produce a
+    // `//` and a target the shell's path allowlist would have to reason about.
+    expect(widgetDashboardTarget("http://127.0.0.1:4021/")).toBeNull()
+    expect(widgetDashboardTarget("http://127.0.0.1:4021/widget")).toBeNull()
+  })
+})
+
+describe("the labels the two new affordances wear", () => {
+  it("names the control and the destination, and never claims the outcome", () => {
+    // The panel cannot see whether a browser opened: there is no reply to a
+    // navigation. So the accessible name says what was asked for, not that it
+    // worked, and it is distinct from the quit control's, which is the other
+    // thing in the same row.
+    expect(WIDGET_OPEN_LABEL).toBe("Dashboard")
+    expect(WIDGET_OPEN_ARIA).toContain("dashboard")
+    expect(WIDGET_OPEN_ARIA).not.toBe(WIDGET_OPEN_ARIA.toLowerCase())
+    expect(WIDGET_OPEN_ARIA).not.toBe(WIDGET_QUIT_ARMED_LABEL)
+    // The tooltip exists because a 9.5px label cannot say what pressing the
+    // control does, and it must not become a second, quieter claim: it says the
+    // same thing the accessible name says, minus the sentence about what the
+    // panel cannot observe.
+    expect(WIDGET_OPEN_TITLE).toBe("Open the oc-dash dashboard in your browser")
+    expect(WIDGET_OPEN_ARIA.startsWith(WIDGET_OPEN_TITLE)).toBe(true)
+  })
+
+  it("says which table each link belongs to, and carries no range", () => {
+    // Two identical `view all` links in one popover are two identical controls
+    // to a screen reader, and a label that mentioned the current range would be
+    // claiming something the link cannot deliver.
+    expect(WIDGET_VIEW_ALL_ARIA).not.toBe(WIDGET_VIEW_ALL_MODELS_ARIA)
+    for (const aria of [WIDGET_VIEW_ALL_ARIA, WIDGET_VIEW_ALL_MODELS_ARIA]) {
+      expect(aria).toContain("dashboard")
+      expect(aria.toLowerCase()).not.toContain("range")
+      expect(aria.toLowerCase()).not.toContain("7 days")
+      expect(aria.toLowerCase()).not.toContain("30 days")
+      expect(aria.toLowerCase()).not.toContain("today")
+    }
+    // Three words, lower case: the table header is upper case and a link has to
+    // read as something to press rather than as part of the caption.
+    expect(WIDGET_VIEW_ALL_LABEL).toBe("view all")
   })
 })
 

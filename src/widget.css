@@ -586,16 +586,63 @@ body {
  * a rewrite of the sentence, which is a decision rather than an accident.
  */
 .widget:has(> section > p.w-note.warn) {
-  padding: 6px 10px 4px;
+  padding: 5px 10px 4px;
+}
+
+/*
+ * Five more reclaims in the same gate, for the same reason, and they are the
+ * second half of the story rather than a new one.
+ *
+ * THE STACKING COST THE GATE ITSELF. The sessions rows grew from 26px to 28px to
+ * hold two lines instead of one, which is 8px over the four rows the panel
+ * shows, and the gate above had already spent its 9px on the state that existed
+ * before the rows grew. Measured with the stacking in place and nothing else
+ * changed, the truncated state landed at 421.22 of 420: 1.22px of content below
+ * the panel edge and 5.22px once the state own bottom padding is counted, so
+ * the root scroller engaged in the one state that is supposed to be the
+ * recoverable one.
+ *
+ * Six px is what these four are worth together, and every one of them is air
+ * BETWEEN bands rather than air at a window edge, which is the distinction the
+ * file already draws when it took 10px off this padding in the first place.
+ * A seventh came off the top padding itself for the same reason, and only
+ * because these six left 0.22px of root overflow in the state they were meant
+ * to rescue:
+ *
+ *   nav.w-range margin-bottom    6 -> 4      2px   under the selector
+ *   footer.w-foot padding-top    5 -> 3      2px   the footnote own air above itself
+ *   .w-top margin-bottom         3 -> 2      1px   under a header of one word
+ *   .w-hero margin-bottom        4 -> 3      1px   hero to sessions, on top of the
+ *                                                    1px already taken there
+ *   .widget padding-top          6 -> 5      1px   air against the top curve
+ *
+ * NOTHING ELSE MOVED, and in particular no row: the two-line cell is the whole
+ * point of the change and a row is data. The note own line-height was left alone
+ * for the reason the comment above gives, and the note wording was left alone
+ * because it is one line at 215.63px inside a 320px box, so there is no second
+ * line for a shorter sentence to remove.
+ *
+ * All seven are behind the gate, so the ordinary panel is unchanged to the pixel
+ * and only the state that no longer fits tightens up.
+ */
+.widget:has(> section > p.w-note.warn) > nav.w-range {
+  margin-bottom: 4px;
 }
 
 .widget:has(> section > p.w-note.warn) > .w-top {
+  margin-bottom: 2px;
+}
+
+.widget:has(> section > p.w-note.warn) > section:not(:last-of-type) {
+  margin-bottom: 4px;
+}
+
+.widget:has(> section > p.w-note.warn) > .w-hero {
   margin-bottom: 3px;
 }
 
-.widget:has(> section > p.w-note.warn) > section:not(:last-of-type),
-.widget:has(> section > p.w-note.warn) > .w-hero {
-  margin-bottom: 4px;
+.widget:has(> section > p.w-note.warn) > footer.w-foot {
+  padding-top: 3px;
 }
 
 .widget:has(> section > p.w-note.warn) > section > p.w-note.warn {
@@ -632,6 +679,46 @@ body {
 .w-cut {
   color: var(--text);
   font-weight: 600;
+}
+
+/*
+ * The "there is more of this than fits on this panel" link, one per table, in
+ * the table header cell beside the count rather than in a body cell.
+ *
+ * THE HEADER CELL IS THE ONLY PLACE IT COSTS NOTHING, and that is measured
+ * rather than preferred. In a body cell the link would compete with `+N more`
+ * for one 193.52px cell, while the header cell is 8.5px type over a 20px row,
+ * so an inline link there adds 0.00px to the panel height at every range in
+ * both schemes. Spending panel slack on a link that could have been free is the
+ * wrong trade.
+ *
+ * `--text` rather than `--accent`, with the underline carrying the rest of the
+ * job. The accent is so far the panel ink for focus rings and the spawn cap
+ * only, and it was measured as text against this cell before being ruled out:
+ * 3.60:1 in the light scheme over a dark backdrop and 3.91:1 in the dark scheme
+ * over a light one, both under the 4.5:1 floor. `--text` measures 13.26:1 and
+ * 8.55:1 there, and the underline is what says "this goes somewhere" rather than
+ * "this is another word in the caption", which matters here because the count
+ * sits right beside it and the two are otherwise the same size.
+ *
+ * `text-transform: none`, because the header is uppercase and this is a
+ * sentence: uppercasing the link makes it read as part of the column caption
+ * rather than as something to press.
+ */
+.w-viewall {
+  margin-left: 6px;
+  color: var(--text);
+  font-weight: 500;
+  text-transform: none;
+  text-decoration: underline;
+  text-underline-offset: 1px;
+  cursor: pointer;
+}
+
+.w-viewall:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-radius: 2px;
 }
 
 .w-table {
@@ -730,22 +817,75 @@ body {
   font-weight: 600;
 }
 
-/* One line, two fields. The identity never yields its width to the secondary
-   text beside it; the secondary text ellipsizes instead. A grid with
-   minmax(0, …) tracks rather than a flex row, and the reason is the table
-   above: a nowrap flex row's min-content width is the sum of its children's
-   text, so under the auto layout this column would be sized by the longest
-   session title the machine has ever held and the panel would run past 340px.
-   A minmax(0, …) track can shrink to nothing, so the column takes what the
-   money columns leave and the labels ellipsize inside it.
-   `align-items: center` rather than `baseline`: the row is 26px and two tracks
-   of 11px and 9px type need centring in it, which is what the design
-   calls for. */
+/* The identity cell, and the one grid both tables put their first column on: a
+   grid rather than a flex row, and the reason is the table above. A nowrap flex
+   row has a min-content width equal to the sum of the text of its children, so
+   under the auto layout this column would be sized by the longest title the
+   machine has ever held and the panel would run past 340px. `minmax(0, …)`
+   tracks shrink to nothing, so the column takes what the money columns leave and
+   the labels ellipsize inside it.
+
+   Two shapes hang off this rule and neither one is the default any more:
+   `.w-label.stack` below, which is the two lines of the sessions table, and
+   `.w-label.model` further down, which is the models name beside its unpriced
+   chip. The sessions table took a modifier rather than changing the base
+   underneath, so that the 26px row and the single line of the models column are
+   a decision on its own rule instead of a side effect of this one. */
 .w-label {
   display: grid;
   grid-template-columns: minmax(0, 55%) minmax(0, 1fr);
   align-items: center;
   column-gap: 5px;
+}
+
+/* The sessions identity, STACKED: the project on the first line and the
+   session's own title on the second, which is the shape the panel was asked for
+   and the shape a 340px cell can afford. Project above title rather than the
+   reverse, because the project is the row's identity and a title pushed off the
+   bottom is a title the reader cannot reach.
+
+   One track now, and the reason the 55%/45% split existed is satisfied by
+   construction rather than by a track: a nowrap flex row's min-content width is
+   the sum of its children's text, and there is now one child per line, so the
+   widest single line bounds the column and each line ellipsizes inside itself
+   instead of competing with the other. Measured, both lines take the whole cell
+   at every row height tried, against 99.55px and 76.47px side by side, so
+   titles ellipsize less than they used to.
+
+   `row-gap: 1px` rather than `column-gap`, and `align-content: center` rather
+   than `align-items`, because this is a two-row grid inside a fixed-height table
+   cell: the pair is centred as a block and the gap belongs between the two
+   lines. The models table is not affected — `.w-label.model` below sets its own
+   tracks, and its row stays 26px. */
+.w-label.stack {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  row-gap: 1px;
+}
+
+/*
+ * THE ROW GROWS WITH IT, and this one declaration is the whole reason the two
+ * lines are not clipped.
+ *
+ * Stacking `.w-label` on its own costs nothing at all, which is exactly the
+ * trap: every cell is `height: 26px` with `overflow: hidden`
+ * (`src/widget.css:668` and `:671`), so a taller pair of lines overflows its own
+ * cell and is clipped by a rule that reports no error and shows no scrollbar.
+ * Measured at 26px, the project line lands 0.42px ABOVE the cell's top edge and
+ * the title 0.08px below its bottom edge, and a code read cannot see either.
+ *
+ * 28px is the smallest height at which both lines are inside the cell. The two
+ * line boxes measure 14.85px (11px type at the panel's 1.35) and 12.10px (9px at
+ * 1.35), 27.95px with the 1px gap between them. At 27px they touch both edges,
+ * so a rounding difference either way clips one of them; at 28px there is
+ * measured air above the project line and the title sits inside the bottom edge.
+ *
+ * It costs 2px per session row over the four rows `WIDGET_SESSION_ROWS` shows,
+ * which is 8px of the panel's 14.66px of slack. Nothing else in the panel moved
+ * to pay for it and no type size changed.
+ */
+.w-table td.w-label.stack {
+  height: 28px;
 }
 
 .w-project {
@@ -897,6 +1037,26 @@ body {
 }
 
 /*
+ * The bar now holds three things: the panel's own status on the left, and the
+ * two controls on the right.
+ *
+ * THE PANEL'S ACTIONS LIVE DOWN HERE, which is where the ask was, and the bar
+ * was already the last element in `.widget` and already at the bottom: the
+ * request was to put actions here, not to move the row. So this adds a control
+ * to the row that exists rather than introducing a footer.
+ *
+ * The left slot keeps its `min-width: 0` and stays the only thing that yields.
+ * Both controls are `flex: 0 0 auto`, so a wide label on either of them costs
+ * the status sentence rather than the control, which is the right way round: a
+ * clipped timestamp is a sentence with its ellipsis, and a clipped button label
+ * is an affordance that cannot be read at all. `.w-updated`'s own comment says
+ * why it exists and this is the other half of the same reason.
+ *
+ * `gap: 8px` is still what keeps the timestamp's ellipsis from ever touching a
+ * button's own left inset, and it is now the gap between two controls as well.
+ */
+
+/*
  * A macOS-sized secondary button: 18px tall, 4px radius, hairline rim, the
  * well tint from `--seg`, primary ink. Same recipe as the selected segment's
  * cap in `.w-seg.is-on`, minus the drop, because this one is not the thing the
@@ -911,7 +1071,7 @@ body {
  * either: the button is in the tab order, so the ring is how a keyboard user
  * finds the one control on the panel that ends the app.
  *
- * `.w-retry` and `.w-start` share this rule rather than copying it.
+ * `.w-retry`, `.w-start` and `.w-open` share this rule rather than copying it.
  * The recipe is sixteen declarations, four of which exist only because the
  * `font` shorthand trap bit both earlier controls: a third copy of the
  * geometry is a third place for that drop to come back, and the panel would then
@@ -923,7 +1083,8 @@ body {
  */
 .w-quit,
 .w-retry,
-.w-start {
+.w-start,
+.w-open {
   appearance: none;
   -webkit-appearance: none;
   margin: 0;
@@ -958,7 +1119,8 @@ body {
 
 .w-quit:hover:not(:disabled):not(.is-armed),
 .w-retry:hover:not(.is-armed),
-.w-start:hover:not(.is-armed) {
+.w-start:hover:not(.is-armed),
+.w-open:hover {
   background: var(--row);
 }
 
@@ -997,7 +1159,8 @@ body {
 
 .w-quit:focus-visible,
 .w-retry:focus-visible,
-.w-start:focus-visible {
+.w-start:focus-visible,
+.w-open:focus-visible {
   /* Drawn INSIDE the button rather than outside it. An outside ring would be
      clipped by `.widget`'s bottom padding at 420px, and would also push the
      row's height, which the panel cannot afford. Same reason the range

@@ -1053,6 +1053,108 @@ export const WIDGET_START_URL = "oc-dash://start-server"
 /** The poll cadence in the reader's units, so no sentence can drift from it. */
 const POLL_SECONDS = Math.round(WIDGET_POLL_MS / 1000)
 
+// ---------------------------------------------------------------------------
+// The third verb, and the one that is not about the shell at all: opening the
+// dashboard in the reader's browser
+// ---------------------------------------------------------------------------
+
+/**
+ * THE THIRD URL THE SHELL MUST INTERCEPT: `oc-dash://open?url=<target>`.
+ *
+ * Scheme `oc-dash`, host `open`, and one query key, beside the two constants
+ * above rather than anywhere else. Three controls in the panel want this string
+ * — the footer's control and the two tables' links — and they must not be able
+ * to disagree about it, so it is built here once and nowhere else. The
+ * function is exported rather than inlined at the three call sites for the same
+ * reason `WIDGET_QUIT_URL` is a constant: this project's tests run in node with
+ * no DOM, so a string assembled inside a component is a string nothing can pin.
+ *
+ * The target is percent-encoded exactly once, by `encodeURIComponent`, over the
+ * WHOLE absolute URL. That encodes `:`, `/` and `?`, so the value can carry no
+ * `&`, no second `?` and no space, and therefore cannot append a second
+ * parameter or split the one it is in. The shell decodes with its own typed
+ * parser rather than by stripping `%` by hand, which is what a hand-rolled
+ * `removingPercentEncoding` gets wrong.
+ *
+ * Where the target comes from, and why it is the page's own origin rather than
+ * a configured value: the panel is served by the very process it is asking about,
+ * and the dashboard is that process's own root. Deriving it here means a panel
+ * opened against a test port opens THAT port's dashboard, with no new
+ * argument, no new environment variable and no shell change.
+ *
+ * It carries no range, and the label says so. Nothing in the dashboard reads a
+ * query string: its range is a hardcoded default, so a link carrying one would
+ * open a window the reader did not ask for with no sign that the parameter had
+ * been ignored. A link that claims nothing needs no parameter.
+ */
+export const WIDGET_OPEN_TARGET_KEY = "url"
+
+const WIDGET_OPEN_URL_PREFIX = `oc-dash://open?${WIDGET_OPEN_TARGET_KEY}=`
+
+/** The whole navigation for one absolute target. */
+export function widgetOpenURL(target: string): string {
+  return `${WIDGET_OPEN_URL_PREFIX}${encodeURIComponent(target)}`
+}
+
+/**
+ * The dashboard's own URL, from the page's own origin, or null for anything
+ * that is not an http(s) document.
+ *
+ * Null rather than a fallback, so the panel can never emit a target the shell is
+ * certain to refuse: an opaque origin (`file:`, `data:`, a sandboxed document)
+ * is not a dashboard, and passing one along would be the panel asking for
+ * something it cannot have. The trailing slash is added here so every caller
+ * passes a bare origin and none of them can build `//`.
+ */
+export function widgetDashboardTarget(origin: string): string | null {
+  return /^https?:\/\/[^/]+$/i.test(origin) ? `${origin}/` : null
+}
+
+/**
+ * The control's label, exported so the test pins the exact string.
+ *
+ * "Dashboard" rather than "Open dashboard", and the reason is measured rather
+ * than a matter of taste: the bar's content box is 320px and it holds the panel's
+ * status sentence, this control and Quit. "Open dashboard" is 95.88px wide and
+ * leaves the status slot 170.02px; "Dashboard" is 69.08px and leaves 196.82px.
+ * The healthy timestamp wants 79.30px and fits either way, so the difference only
+ * shows up in the offline path, where the panel's longest sentences — a spawn
+ * request at 214.38px and a quit request at 199.32px — are the ones with the
+ * least room. The longer label would cost the spawn sentence 46px of its tail
+ * and the quit sentence 31px. The full wording is in `WIDGET_OPEN_ARIA` and in
+ * the control's tooltip, where it costs no layout.
+ */
+export const WIDGET_OPEN_LABEL = "Dashboard"
+
+/**
+ * The accessible name, which carries the two things a 15-character button
+ * cannot: which thing it opens, and that this page cannot see whether it
+ * opened. The panel emits the request and the shell decides; a label that said
+ * "opened" would be claiming the shell's half of the outcome.
+ */
+export const WIDGET_OPEN_ARIA =
+  "Open the oc-dash dashboard in your browser. This panel cannot see whether it opened."
+
+/**
+ * The same words for the pointer, since a 9.5px label says what the control is
+ * for and not what pressing it does. Hover-only and therefore never the only
+ * place a word lives: the aria-label above carries the same sentence to anyone
+ * who cannot hover.
+ */
+export const WIDGET_OPEN_TITLE = "Open the oc-dash dashboard in your browser"
+
+/**
+ * What the two `view all` links say.
+ *
+ * Three words, and no range in them. They link to the dashboard's own root, so
+ * the reader lands on whatever window the dashboard opens on by default; the
+ * wording says "all sessions" rather than "all sessions in this range" because
+ * the second claim is not one the link can keep.
+ */
+export const WIDGET_VIEW_ALL_LABEL = "view all"
+export const WIDGET_VIEW_ALL_ARIA = "View all sessions on the oc-dash dashboard"
+export const WIDGET_VIEW_ALL_MODELS_ARIA = "View all models on the oc-dash dashboard"
+
 /**
  * How long the confirm state waits, in milliseconds: 2000, against the quit
  * control's 4000.

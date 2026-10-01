@@ -4,6 +4,9 @@ import { fetchModelNames, fetchSessions, fetchSummary } from "../api"
 import {
   MODELS_HEAD_TITLE,
   WIDGET_MODEL_ROWS,
+  WIDGET_OPEN_ARIA,
+  WIDGET_OPEN_LABEL,
+  WIDGET_OPEN_TITLE,
   WIDGET_POLL_MS,
   WIDGET_QUIT_ARM_MS,
   WIDGET_QUIT_IDLE,
@@ -16,15 +19,20 @@ import {
   WIDGET_START_IDLE,
   WIDGET_START_SENT_TEXT,
   WIDGET_START_URL,
+  WIDGET_VIEW_ALL_ARIA,
+  WIDGET_VIEW_ALL_LABEL,
+  WIDGET_VIEW_ALL_MODELS_ARIA,
   gapTitle,
   persistWidgetRange,
   readWidgetRange,
   sessionsHeadTitle,
   widgetAtRange,
+  widgetDashboardTarget,
   widgetGap,
   widgetHero,
   widgetModels,
   widgetOfflineActions,
+  widgetOpenURL,
   widgetQuitDisarm,
   widgetQuitElapsed,
   widgetQuitPress,
@@ -319,6 +327,40 @@ export function Widget() {
 
   const disarmStart = useCallback(() => setStart((s) => widgetStartDisarm(s)), [])
 
+  // The dashboard's own URL, derived from the page this panel was served from
+  // and built by the one function in widget.ts that all three controls use. It
+  // is constant for the life of the document, so it is computed once here rather
+  // than read per render: a render that asked `window` every frame would be the
+  // impure render the `now` comment above is about.
+  //
+  // Null when the page is not an http document, which a panel served by oc-dash
+  // cannot be. The two table links carry the URL as their `href`, so that on the
+  // one page where it is null there is nothing to go to and the anchors render
+  // without a destination rather than with a broken one.
+  const dashboardURL = useMemo(() => {
+    const target = widgetDashboardTarget(window.location.origin)
+    return target ? widgetOpenURL(target) : null
+  }, [])
+
+  // The handoff, and the same one the quit and start controls make: the page
+  // cannot open a browser, so it emits the intent as a navigation and
+  // widget.ts's `widgetOpenURL` names exactly what the shell has to match. The
+  // emission is outside any state updater and there is no state here at all, so
+  // StrictMode's double-invocation has nothing to double: one press, one
+  // navigation, in a dev build as in a shipped one.
+  //
+  // No arm window and no sent label, both measured against what the other two
+  // verbs need. An arm exists because a wrong quit or a wrong spawn costs the
+  // reader something they cannot get back; a browser tab opening costs nothing a
+  // stray click could cost. A sent label would have to claim the page cannot
+  // observe: there is no reply to a navigation, so the panel can say a request
+  // went out and nothing else, which is what leaving the label alone says.
+  const openDashboard = useCallback(() => {
+    const target = widgetDashboardTarget(window.location.origin)
+    if (!target) return
+    window.location.assign(widgetOpenURL(target))
+  }, [])
+
   // "Try again": one press, the panel's own fetch, the same range it is already
   // showing. No arm, because nothing outside this page happens and a request
   // with no effect cannot spoil anything a stray click would spoil.
@@ -465,6 +507,20 @@ export function Widget() {
                   {sessionRows.remaining > 0 && (
                     <span className="w-cut"> +{sessionRows.remaining} more</span>
                   )}
+                  {/* The table way out, in the header cell because that is where
+                      it costs 0.00px, and carrying nothing at all. The dashboard
+                      reads no query string and its range is a hardcoded default, so
+                      a link with `?range=` in it would open a window the reader did
+                      not ask for with nothing on screen saying the parameter had
+                      been dropped. This goes to the dashboard and lets the
+                      dashboard open on whatever it opens on. */}
+                  <a
+                    className="w-viewall"
+                    href={dashboardURL ?? undefined}
+                    aria-label={WIDGET_VIEW_ALL_ARIA}
+                  >
+                    {WIDGET_VIEW_ALL_LABEL}
+                  </a>
                 </th>
                 <th className="num">Cost</th>
                 <th className="num">Tokens</th>
@@ -501,6 +557,18 @@ export function Widget() {
                 <th title={MODELS_HEAD_TITLE}>
                   Model
                   {models.remaining > 0 && <span className="w-cut"> +{models.remaining} more</span>}
+                  {/* The same link, and the same reason it carries nothing. It is
+                      a separate element rather than one shared by both tables
+                      because its accessible name says which table it belongs to:
+                      "view all" twice in one popover, read out of context by a
+                      screen reader, is two identical controls. */}
+                  <a
+                    className="w-viewall"
+                    href={dashboardURL ?? undefined}
+                    aria-label={WIDGET_VIEW_ALL_MODELS_ARIA}
+                  >
+                    {WIDGET_VIEW_ALL_LABEL}
+                  </a>
                 </th>
                 <th className="num">Cost</th>
                 <th className="num">Share</th>
@@ -614,8 +682,10 @@ export function Widget() {
         {surface && ` ${surface}`}
       </footer>
 
-      {/* The quit row. Refresh on the left, the control on the
-          right, and nothing else in it. */}
+      {/* The quit row, and the row it always was: the panel's own status on the
+          left, the controls on the right. It was already the last element in
+          `.widget` and already at the bottom, so the ask was to put actions here
+          rather than to move the row. */}
       <div className="w-bar">
         {/* The timestamp's new home, and after a request is sent
             the one honest sentence about it. The request state takes the slot
@@ -677,6 +747,21 @@ export function Widget() {
             to press it a second time. The pointer is the case that needs the
             guard, because leaving with the mouse is the sequence that produces a
             stray confirm, and the arm window already covers the walk-away case. */}
+        {/* The panel's way out to the dashboard, beside Quit and on the same
+            glass. A real `<button type="button">` for the quit control's reason:
+            it is in the tab order and Space and Enter activate it with no key
+            handling added here. It has no arm window and no sent label, and the
+            reasons are on `openDashboard` above rather than here. */}
+        <button
+          type="button"
+          className="w-open"
+          aria-label={WIDGET_OPEN_ARIA}
+          title={WIDGET_OPEN_TITLE}
+          onClick={openDashboard}
+        >
+          {WIDGET_OPEN_LABEL}
+        </button>
+
         <button
           type="button"
           className={`w-quit${quitView.armed ? " is-armed" : ""}${quitView.sent ? " is-sent" : ""}`}
@@ -694,13 +779,24 @@ export function Widget() {
 }
 
 /**
- * Two fields on one line: the project, then the session's own title. The
- * title attribute carries the full title, which 340px cannot show inline.
+ * Two fields on two lines: the project, then the session's own title below it.
+ *
+ * The two spans existed before this shape did, side by side; what changed is
+ * the grid they sit in and the height of the row they sit in, both in
+ * widget.css. The `stack` class is what makes the stacking a decision on this
+ * table rather than a change to the shared cell both tables use.
+ *
+ * The title attribute carries the full title, which 340px cannot show inline.
+ * It carries the title only, so a project name long enough to ellipsize has no
+ * tooltip to recover it with. That is a pre-existing gap in the one-line layout
+ * too and it is not widened here: the project is a directory basename, it gets
+ * the whole line now rather than 55% of one, and it ellipsizes less than it
+ * did.
  */
 function SessionRow({ row }: { row: WidgetSessionRow }) {
   return (
     <tr>
-      <td className="w-label" title={row.title}>
+      <td className="w-label stack" title={row.title}>
         <span className="w-project">{row.project}</span>
         <span className="w-sub">{row.title}</span>
       </td>
