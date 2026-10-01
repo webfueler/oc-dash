@@ -1,3 +1,4 @@
+import { fmtUSD } from "./money.js"
 import { contextStatsRange, type ResolvedRange } from "./ranges.js"
 
 /**
@@ -14,6 +15,26 @@ export interface SummaryBody {
   contextActivity?: unknown
   /** One entry per requested project id whose call succeeded, in request order. */
   projectStats?: { project: string; data: unknown }[]
+  /**
+   * `data.cost` as the finished string, for callers that render the money and
+   * must not round it themselves.
+   *
+   * The string comes from the project's one formatter (`fmtUSD` in
+   * `server/money.ts`, the panel's `fmtMoney`), because Intl.NumberFormat
+   * rounds ties away from zero and neither Swift's String(format:) nor
+   * NumberFormatter reproduces it. That is why the server sends the string:
+   * a menu bar shell that reformatted the number would be a rounding risk, not
+   * a refactor. It is additive and computed from the same `cost` the payload
+   * already carries, so no existing field changes.
+   *
+   * Read `$0.00` as "zero cost", not "cost is known". A range whose model is
+   * unpriced has tokens and a zero cost, and so does a range with no activity
+   * at all; the two are indistinguishable by cost alone. The tokens that
+   * separate them are already in `data.tokens`. Callers whose surface has no
+   * room for that distinction (a menu bar) should decide with the Captain
+   * rather than assume `$0.00` is a statement about the truth of the figure.
+   */
+  costText: string
 }
 
 /** The typed client answers with the payload; a raw fetch wraps it in `data`. */
@@ -94,6 +115,10 @@ export async function fetchSummaryBody(
 
   return {
     data,
+    // `isMainStats` already proved `cost` is a number, so the formatter cannot
+    // hit its non-finite branch here. Computed from `data` and nothing else, so
+    // it cannot disagree with the numeric cost beside it.
+    costText: fmtUSD((data as { cost: number }).cost),
     ...(contextActivity !== undefined ? { contextActivity } : {}),
     ...(projectStats.length > 0 ? { projectStats } : {}),
   }

@@ -2,27 +2,19 @@
  * The project's one money formatter. The dashboard and the panel both call
  * it, so a cost reads identically in both surfaces.
  *
+ * The implementation moved to `server/money.ts`, because /api/summary now
+ * sends the finished string and tsconfig.server.json pins `rootDir: "server"`,
+ * which makes `src/format.ts` unreachable from a server module. This is a
+ * re-export, not a copy: the panel's `fmtMoney` and the dashboard's `fmtUSD`
+ * are still the same function object, and `test/widget.test.ts` pins that with
+ * `expect(fmtMoney).toBe(fmtUSD)`.
+ *
  * The rule, picked by hand in the panel's design review and now shared:
  * exactly two decimals; a genuine zero prints `$0.00`; a non-zero amount
  * under one cent prints `<$0.01` (`<-$0.01` for a credit) rather than
  * rounding to `$0.00`, which would read as free.
  */
-const USD = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-
-export function fmtUSD(n: number): string {
-  if (!Number.isFinite(n)) return "—"
-  // `n === 0` rather than `abs < 0.01`, so a genuine zero and a negative
-  // zero both land on "$0.00".
-  if (n === 0) return "$0.00"
-  const abs = Math.abs(n)
-  if (abs < 0.01) return n < 0 ? "<-$0.01" : "<$0.01"
-  return USD.format(n)
-}
+export { fmtUSD } from "../server/money.js"
 
 /** K/M/B token formatting. */
 export function fmtTokens(n: number): string {

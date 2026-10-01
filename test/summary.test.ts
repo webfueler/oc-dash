@@ -11,6 +11,7 @@ import type {
   TokenUsage,
 } from "../src/api"
 import { NO_MODEL_KEY, applyFilters } from "../src/filters"
+import { fmtUSD } from "../src/format"
 import { sess } from "./testFixtures"
 import type { CardMoney, CardMoneyInput } from "../src/summary"
 import {
@@ -260,6 +261,7 @@ const statsOk = (preset: Range): SummaryOk => ({
     activity: [],
     models: [],
   },
+  costText: "$1.00",
 })
 
 describe("hero label and payload in lockstep", () => {
@@ -601,6 +603,9 @@ const mOk = (preset: Range, data: SessionStatsInfo): SummaryOk => ({
   range: { preset },
   timezone: "UTC",
   data,
+  // Derived, not typed in: these fixtures vary `cost`, and the whole point of
+  // the field is that it cannot disagree with the number it sits beside.
+  costText: fmtUSD(data.cost),
 })
 
 const mSessions = (preset: Range, rows: SessionInfo[]): SessionsPayload => ({

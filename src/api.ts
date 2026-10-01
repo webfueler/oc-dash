@@ -65,6 +65,17 @@ export interface SummaryOk {
   timezone: string
   data: SessionStatsInfo
   /**
+   * Additive: `data.cost` as the already formatted string, from the project's
+   * one formatter. A caller that renders the money uses this rather than
+   * rounding the number itself, because Intl.NumberFormat rounds ties away from
+   * zero and Swift's String(format:) and NumberFormatter do not reproduce it.
+   * Absent on `SummaryDegraded`, where there is no cost to format.
+   *
+   * `"$0.00"` means a zero cost, which an unpriced model also produces. Pair it
+   * with `data.tokens` before reading it as a statement that money was counted.
+   */
+  costText: string
+  /**
    * Additive, Today-only: the trailing 7 days of activity (same shape as
    * `data.activity`) so the chart can show the in-range day in context.
    */

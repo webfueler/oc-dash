@@ -16,7 +16,7 @@
 
 import { DEFAULT_PORT } from "./port.js"
 import { PACKAGE, type HelpTopic } from "./args.js"
-import { registryPath } from "./registry.js"
+import { appVersion, registryPath } from "./registry.js"
 
 /** `cmd  description`, padded as pairs so the columns cannot drift. */
 function rows(pairs: [string, string][]): string[] {
@@ -83,7 +83,7 @@ const ROOT = [
   `  ${registryPath()}`,
   "",
   '  { "port": 4021, "pid": 12345,',
-  '    "url": "http://127.0.0.1:4021", "version": "0.1.8" }',
+  `    "url": "http://127.0.0.1:4021", "version": "${appVersion()}" }`,
   "",
   "  Written when `server start` succeeds, deleted on a clean `server stop`.",
   "  This is also how the oc-dashbar menu bar app finds the server.",

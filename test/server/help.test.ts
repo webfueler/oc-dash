@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { helpText } from "../../server/help.js"
 import type { HelpTopic } from "../../server/args.js"
 import { DEFAULT_PORT } from "../../server/port.js"
-import { registryPath } from "../../server/registry.js"
+import { appVersion, registryPath } from "../../server/registry.js"
 
 const TOPICS: HelpTopic[] = ["root", "server", "start", "stop", "status"]
 
@@ -80,7 +80,9 @@ describe("helpText", () => {
     const root = helpText("root")
     expect(root).toContain(registryPath())
     expect(root).toContain('"port": 4021, "pid": 12345,')
-    expect(root).toContain('"url": "http://127.0.0.1:4021", "version": "0.1.8"')
+    // The version in the example comes from the manifest, not from a literal
+    // here, so this cannot drift from `package.json` again the way 0.1.8 did.
+    expect(root).toContain(`"url": "http://127.0.0.1:4021", "version": "${appVersion()}"`)
   })
 
   it("tells the reader the background server does not survive logout", () => {

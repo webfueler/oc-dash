@@ -119,6 +119,9 @@ function ok(over: Partial<SessionStatsInfo> = {}, preset: Range = "today"): Summ
       models: [],
       ...over,
     },
+    // Derived from the same cost, so a fixture that varies `cost` cannot end up
+    // carrying a costText the real route would never have sent beside it.
+    costText: fmtUSD((over.cost ?? 9.5) as number),
   }
 }
 
