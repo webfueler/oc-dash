@@ -259,6 +259,70 @@ export function widgetSurfaceRequested(search: string | null | undefined): boole
   }
 }
 
+// ---------------------------------------------------------------------------
+// The ground, and the one number that brings it back
+// ---------------------------------------------------------------------------
+
+/**
+ * The query key on the widget route that overrides the panel's tint:
+ * `?glass=<0..1>`, defaulting to 0.
+ *
+ * It exists because the shipped panel is fully transparent and the alternative
+ * is worth seeing side by side on his own screen without a rebuild: at
+ * `?glass=0.84` the panel is the one that shipped before 2026-10-01, pixel for
+ * pixel, because `--glass-alpha` at 1 puts back the same two alphas the old
+ * token carried (see the `--row-ground` rule in widget.css). Nothing else about
+ * the page changes with the parameter.
+ *
+ * One optional numeric value, clamped, and anything unparseable falls back to
+ * the default rather than painting a ground nobody asked for. It is opt-in and
+ * off unless it is in the query string, so the shipped URL is the transparent
+ * one.
+ */
+export const WIDGET_GLASS_KEY = "glass"
+
+/**
+ * The custom property the dial lives in. Named here because the entry file sets
+ * it and this is where the two sides can be pinned to the same string; widget.css
+ * declares it in `:root` with the Captain's ruling on it.
+ */
+export const WIDGET_GLASS_VAR = "--glass-alpha"
+
+/** What the panel paints with no parameter: nothing at all. */
+export const WIDGET_GLASS_DEFAULT = 0
+
+/**
+ * The tint alpha in force for a given query string: 0 unless the string carries
+ * one.
+ *
+ * Three rules, and each has a wrong answer worth naming. Absent or unparseable
+ * is the default rather than an error, because a bad query string must not be
+ * able to paint ground on a panel whose whole point is that it has none. Out of
+ * range is clamped rather than refused, so `?glass=2` is the most ground the
+ * panel can ever paint and `?glass=-1` is the least, which is the transparent
+ * one. Nothing here reaches the DOM, so the tests run in the node environment
+ * this project's vitest uses.
+ */
+export function widgetGlassAlpha(search: string | null | undefined): number {
+  if (!search) return WIDGET_GLASS_DEFAULT
+  let raw: string | null
+  try {
+    raw = new URLSearchParams(search).get(WIDGET_GLASS_KEY)
+  } catch {
+    return WIDGET_GLASS_DEFAULT
+  }
+  if (raw === null) return WIDGET_GLASS_DEFAULT
+  const trimmed = raw.trim()
+  // `Number("")` is 0 rather than NaN, so the empty value is refused here
+  // instead of arriving as a valid alpha that nobody typed.
+  if (trimmed === "") return WIDGET_GLASS_DEFAULT
+  const n = Number(trimmed)
+  // Also catches Infinity, which `Number` parses happily and which is not an
+  // alpha. It falls back with the rest rather than clamping to 1.
+  if (!Number.isFinite(n)) return WIDGET_GLASS_DEFAULT
+  return Math.min(1, Math.max(0, n))
+}
+
 export interface WidgetRangeState {
   /** The range the selector is on. */
   range: Range

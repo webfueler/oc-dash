@@ -30,16 +30,48 @@
  * look macOS is about twenty lines of CSS each. So: `backdrop-filter` plus
  * tokens plus hand-built geometry, zero kilobytes.
  *
- * THE TRANSPARENCY IS NOT FULL, and that is a decision made from measurement
+ * THE TRANSPARENCY IS NOT FULL ANY MORE, and that is a decision the Captain took
+ * against this file's own measurement rather than by accident. Read the block
+ * below for the measurement, and then read the ruling under it, which is newer.
+ *
+ * WHAT SHIPS: no ground at all. `--glass-alpha` is 0 in both schemes, so
+ * `.widget`'s `background` resolves to `rgba(..., 0)` and paints nothing, and the
+ * tables' own `--row` ground is gone with it. That second one is the half that is
+ * easy to miss: at a transparent tint the panel was still NOT transparent, because
+ * `table.w-table` painted its own fill over 27.9% of it, half-opaque white in the
+ * light scheme. Full transparency means both, and both are gone.
+ *
+ * THE RULING, 2026-10-01. He was shown the ladder (roughly 57% of the panel's text
+ * under 4.5:1 at zero, worst leaf 1.01:1 on the cost figure itself) and chose: "go
+ * fully transparent. I want to see the final result". He was offered a local scrim,
+ * priced at 0.46 to 0.79 alpha over a fifth of the panel, and declined it. So the
+ * floor is knowingly broken here and the sweep that measures by how much is a
+ * deliverable, not a gate. Nothing in this file adds a scrim, a tint, a text shadow
+ * or any other rescue for it, and a future change that looks like legibility
+ * insurance is not something these rules ask for.
+ *
+ * ONE NUMBER BRINGS IT BACK, and a revert is one edit: `--glass-alpha` is the only
+ * dial, and both `--glass` and the tables' `--row-ground` are computed from it. Set
+ * it to 1 on `:root` and the panel is the exact one the paragraphs below were
+ * written against: 0.84 of tint, 0.06 of row ground in the dark scheme, 0.84 and
+ * 0.5 in the light one. `?glass=<0..1>` on the widget route sets the same dial for
+ * one page load, so the A/B needs no rebuild; the parse is `widgetGlassAlpha` in
+ * src/widget.ts and `?surface=1` reads the result back off the computed style.
+ *
+ * ---------------------------------------------------------------------------
+ *
+ * WHAT THE BLOCK BELOW DESCRIBES, and it is the record rather than the state.
+ *
+ * THE TRANSPARENCY WAS NOT FULL, and that was a decision made from measurement
  * rather than taste. Option A was measured over the desktop it drew itself and
  * got 4.84:1 light and 5.70:1 dark, then the same 9.5px grey was measured against
- * every grey from black to white and got **1.02:1** at mid grey. The tint below
- * is therefore opaque enough to bound the ground under every text leaf: over
+ * every grey from black to white and got **1.02:1** at mid grey. The tint was
+ * therefore made opaque enough to bound the ground under every text leaf: over
  * white, over black and over a photographic backdrop, the worst leaf in the
- * panel still measures at or above 4.5:1, confirmed leaf by leaf against the
- * real painted pixels rather than against a token.
+ * panel measured at or above 4.5:1, confirmed leaf by leaf against the real
+ * painted pixels rather than against a token.
  *
- * `--glass` is what does the bounding, and the alpha in it is the tuned number.
+ * `--glass` is what did the bounding, and the alpha in it was the tuned number.
  *
  * ---------------------------------------------------------------------------
  * The alpha, and why it is 0.84 and not the 0.70 that was asked for
@@ -54,7 +86,7 @@
  *   0.70      3.34:1        2.94:1     <- 8/16 and 4/16 states under the floor
  *   0.78      4.03:1        3.89:1
  *   0.82      4.42:1        4.34:1
- *   0.84      4.59:1        4.70:1     <- shipped; 0 of 32 under
+ *   0.84      4.59:1        4.70:1     <- what `?glass=0.84` restores; 0 of 32 under
  *   0.86      4.82:1        5.01:1
  *   0.88      4.98:1        5.33:1
  *
@@ -82,21 +114,22 @@
  * near-black. That trade was not taken, and the ladder above is the table
  * that decision needs.
  *
- * BOTH schemes now carry the same 0.84, where the earlier tuning carried 0.86
+ * BOTH schemes carried the same 0.84, where the earlier tuning carried 0.86
  * and 0.88. The
- * asymmetry is gone because it was a workaround: it existed to buy the light
+ * asymmetry was gone because it was a workaround: it existed to buy the light
  * scheme's 27px hero enough ground, and at a common alpha the light hero is the
- * binding leaf in both schemes anyway. What this costs in margin, stated rather
- * than buried: the earlier light scheme cleared the floor by 0.48 and this
- * clears it by 0.09, which is thin. The dark scheme's tightest leaf is the
+ * binding leaf in both schemes anyway. What that cost in margin, stated rather
+ * than buried: the earlier light scheme cleared the floor by 0.48 and that
+ * cleared it by 0.09, which is thin. The dark scheme's tightest leaf was the
  * 8.5px table head over a light backdrop at 4.70:1, up from 5.01:1.
  *
  * The binding leaf in each scheme is worth naming, because they are different
- * and only one of them is small type. Light's is `.w-hero-num`, the 27px figure,
+ * and only one of them is small type. Light's was `.w-hero-num`, the 27px figure,
  * over a dark backdrop: a large number on a large ground, which is the best
- * possible place for a panel's tightest margin. Dark's is `th`/`th.num`, the
- * 8.5px table heads, over a light backdrop, which is the exposure to watch if
- * anyone raises the transparency again.
+ * possible place for a panel's tightest margin. Dark's was `th`/`th.num`, the
+ * 8.5px table heads, over a light backdrop. With no ground those are both simply
+ * gone rather than re-pointed, and the leaf that reads worst now is measured in
+ * the mission's report rather than pinned here.
  *
  * ---------------------------------------------------------------------------
  *
@@ -150,12 +183,34 @@
 
 :root {
   color-scheme: dark light;
-  /* The tinted ground under the material, and the only thing between the text
-     and the desktop: nothing above `.widget` paints a ground, and the alpha
-     ladder puts 0.84 at the floor for 4.5:1 in both schemes. See the block
-     above for the ladder and for what 0.70 would have cost. */
-  --glass: rgba(13, 17, 23, 0.84);
+  /* THE DIAL, and the only ground the panel has left to turn. Zero, because on
+     2026-10-01 the Captain chose full transparency over this project's 4.5:1
+     legibility floor after being shown what it costs: roughly 57% of the
+     panel's text under the floor at 0, worst leaf 1.01:1. He was offered a scrim
+     and declined it. See the header block for the whole of the reasoning, and
+     the mission's report for the measured price.
+
+     It is a single number on purpose. `--glass` and `--row-ground` below are both
+     computed from it, so putting this one line back to 1 restores the exact panel
+     that block was written against, and `?glass=<0..1>` on the widget route sets
+     it for one page load so the comparison needs no rebuild. Do not "tidy" a
+     non-zero alpha in here to make the panel more readable: the value is the
+     Captain's decision, taken with the measurement in front of him. */
+  --glass-alpha: 0;
+  /* The panel's own ground. Nothing above `.widget` paints one, and at an alpha
+     of 0 this declaration paints nothing either. */
+  --glass: rgba(13, 17, 23, var(--glass-alpha));
   --glass-line: rgba(255, 255, 255, 0.2);
+  /* The tables' ground, which used to be `--row` itself and which covered 27.9%
+     of the panel: at a transparent tint the panel was still not transparent
+     because these two tables painted their own fill. It is a separate token now
+     for one reason, so a hover still has a fill to lift without the table
+     regaining one. Dividing by 0.84 first keeps 0.84 exact rather than a
+     rounded fraction of it. */
+  --row-ground: rgba(255, 255, 255, calc(var(--glass-alpha) / 0.84 * 0.06));
+  /* The hover well, and the ONLY thing `--row` is for now that the tables have
+     their own ground token. A hover is a transient state under the pointer and
+     the reader is never reading it for long, so it keeps the tint it had. */
   --row: rgba(255, 255, 255, 0.06);
   --seg: rgba(255, 255, 255, 0.08);
   --seg-on: rgba(255, 255, 255, 0.94);
@@ -178,11 +233,14 @@
   :root {
     /* Light mode's worst backdrop is a black one and dark mode's is a white
        one, and at the earlier 0.88 and 0.86 they needed opposite amounts of tint
-       to be bounded by the same ink. A common 0.84 was measured and both clear
-       4.5:1 there, so the asymmetry is gone; the binding leaf is this scheme's
-       27px hero over a dark backdrop at 4.59:1. */
-    --glass: rgba(250, 251, 253, 0.84);
+       to be bounded by the same ink. A common 0.84 was measured and both cleared
+       4.5:1 there, so the asymmetry is gone; the binding leaf was this scheme's
+       27px hero over a dark backdrop at 4.59:1. Both numbers below are computed
+       from the same `--glass-alpha` as the dark scheme's, so the dial turns both
+       at once and nothing here can be left half-turned. */
+    --glass: rgba(250, 251, 253, var(--glass-alpha));
     --glass-line: rgba(0, 0, 0, 0.13);
+    --row-ground: rgba(255, 255, 255, calc(var(--glass-alpha) / 0.84 * 0.5));
     --row: rgba(255, 255, 255, 0.5);
     --seg: rgba(0, 0, 0, 0.055);
     --seg-on: rgba(255, 255, 255, 0.98);
@@ -254,10 +312,16 @@ body {
      was what hid the native material: two declarations, `html, body` and
      `.widget`, and dropping only one of them leaves a rectangle of flat
      colour sitting on top of the blur. With both gone, what shows through is
-     whatever the popover's own NSGlassEffectView draws, and the ground that
-     bounds the text is `--glass` on `.widget` below. The shell's job is to
+     whatever the popover's own NSGlassEffectView draws. The shell's job is to
      make the webview and the popover window non-opaque so there is something
-     behind the page at all. */
+     behind the page at all.
+
+     WHAT USED TO BE THE NEXT SENTENCE, and it is no longer true of anything that
+     ships: the ground that bounded the text was `--glass` on `.widget` below.
+     That is at zero now, deliberately, so the panel paints no ground of its own
+     anywhere and the ink sits directly on the native material. See the header
+     block for why, and note what it costs: nothing here bounds the text any
+     more, so the contrast sweep's floor is knowingly unmet. */
   background: transparent;
   color: var(--text);
   font: 11px/1.35 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -308,6 +372,13 @@ body {
      webview's bottom edge, which is the one-surface property and is a
      function of `min-height`, not of this value. */
   padding: 8px 10px 6px;
+  /* The panel's only ground, and it is at zero. The declaration stays rather than
+     being deleted because this is the one place the whole transparency question
+     is answered, and `--glass-alpha` above is the one number that answers it
+     differently: at 0.84, exactly the panel the comments below were written
+     against; at 0, which ships, this resolves to `rgba(13, 17, 23, 0)` and paints
+     nothing at all. Deleting the line instead would put the dial somewhere less
+     findable than the selector that owns it. */
   background: var(--glass);
   /* The prefix first: Safari 9 through 17 spell it `-webkit-`, and the panel
      runs in a WKWebView where the unprefixed spelling is only guaranteed from
@@ -729,7 +800,21 @@ body {
      width for the money, and any name it picked would be a cap that a big
      enough figure walks past. */
   table-layout: auto;
-  background: var(--row);
+  /* THE SECOND GROUND, and the one that made "transparent" a lie while the panel
+     tint was already at zero. This was `--row` directly, which is half-opaque
+     white in the light scheme and covered 27.9% of the panel — the largest
+     painted thing left in it once `.widget` went. It is `--row-ground` now, which
+     is the same colour scaled by `--glass-alpha` and so is zero at the same
+     moment the panel's own tint is. Both grounds go together or neither does.
+
+     WHAT CARRIES THE ROWS NOW, since the fill is not doing it: the hairline
+     below, on every `td`, plus the `th` rule and the column rules. The panel
+     already had all of them with the fill in place, so no rule was added and no
+     layout moved — this is the structure the table was drawing before anyone
+     made the fill part of it. What a 1px hairline is worth over a ground the
+     panel did not choose is a measurement, and it is in the mission's report
+     rather than assumed here. */
+  background: var(--row-ground);
   border-radius: 7px;
   overflow: hidden;
   /* The grouped-table hairline: an inset ring rather than a `border`, so the

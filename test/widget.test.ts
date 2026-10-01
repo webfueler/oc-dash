@@ -13,6 +13,9 @@ import { sess } from "./testFixtures"
 import { fmtUSD } from "../src/format"
 import {
   MODELS_HEAD_TITLE,
+  WIDGET_GLASS_DEFAULT,
+  WIDGET_GLASS_KEY,
+  WIDGET_GLASS_VAR,
   WIDGET_MODEL_ROWS,
   WIDGET_OPEN_ARIA,
   WIDGET_OPEN_LABEL,
@@ -53,6 +56,7 @@ import {
   widgetDashboardTarget,
   widgetGap,
   widgetHero,
+  widgetGlassAlpha,
   widgetModels,
   widgetOfflineActions,
   widgetOpenURL,
@@ -1697,5 +1701,74 @@ describe("the panel's view model ignores contextActivity", () => {
     // fields; both sides really were rendered, not skipped by an early return.
     expect(widgetStats(withContext)).not.toBeNull()
     expect(widgetModels(withContext, undefined).rows).toHaveLength(2)
+  })
+})
+
+describe("the tint override", () => {
+  it("is off by default, and the default is the transparent panel", () => {
+    // The whole point of the parameter is to let the Captain put today's panel
+    // beside the transparent one in a second. So the shipped URL has to be the
+    // transparent one, which means the default is zero and not "whatever the
+    // tint used to be".
+    expect(WIDGET_GLASS_DEFAULT).toBe(0)
+    for (const search of ["", "?", "range=7d", "?surface=1", "?glassish=0.84"]) {
+      expect(widgetGlassAlpha(search)).toBe(0)
+    }
+    // A null or absent query string is the same case as an empty one, and the
+    // entry file passes `window.location.search` which is never null.
+    expect(widgetGlassAlpha(null)).toBe(0)
+    expect(widgetGlassAlpha(undefined)).toBe(0)
+  })
+
+  it("reads the one numeric value, and 0.84 is the panel that used to ship", () => {
+    expect(widgetGlassAlpha("?glass=0.84")).toBe(0.84)
+    // Written without the leading dot, and with the parameter not first: both
+    // are the same alpha to a reader and a number to `Number`. The `+` form is
+    // here because `URLSearchParams` decodes it to a space, which is why the
+    // value is trimmed before it is read rather than after.
+    expect(widgetGlassAlpha("?glass=.84")).toBe(0.84)
+    expect(widgetGlassAlpha("?glass=+0.84")).toBe(0.84)
+    expect(widgetGlassAlpha("?range=7d&glass=0.5")).toBe(0.5)
+    // It composes with the diagnostic that already existed rather than
+    // replacing it, because both are read from the same query string.
+    expect(widgetGlassAlpha("?surface=1&glass=0.84")).toBe(0.84)
+  })
+
+  it("clamps rather than refusing, and the ends are the two panels that exist", () => {
+    // `?glass=2` is not a second ground to invent; it is the most ground this
+    // panel can ever paint, which is the tinted one. `?glass=-1` is the least,
+    // which is the transparent one.
+    expect(widgetGlassAlpha("?glass=2")).toBe(1)
+    expect(widgetGlassAlpha("?glass=99")).toBe(1)
+    expect(widgetGlassAlpha("?glass=-1")).toBe(0)
+    expect(widgetGlassAlpha("?glass=-0.001")).toBe(0)
+    // The ends themselves are not clamped into anything else.
+    expect(widgetGlassAlpha("?glass=1")).toBe(1)
+    expect(widgetGlassAlpha("?glass=0")).toBe(0)
+  })
+
+  it("falls back to the default on anything it cannot read as a number", () => {
+    // Every one of these would otherwise be a ground nobody asked for. The empty
+    // value matters most: `Number("")` is 0 rather than NaN, so it has to be
+    // refused before it reaches `Number` or `?glass=` would read as an alpha of
+    // zero by accident rather than by decision.
+    for (const raw of ["", " ", "  ", "abc", "0.84abc", "0,84", "transparent", "1px", "e"]) {
+      expect(widgetGlassAlpha(`?glass=${encodeURIComponent(raw)}`)).toBe(0)
+    }
+    // A key with no `=` is the same as an empty value.
+    expect(widgetGlassAlpha("?glass")).toBe(0)
+    // Infinity parses as a number and is not an alpha, so it falls back with the
+    // rest rather than clamping to 1.
+    expect(widgetGlassAlpha("?glass=Infinity")).toBe(0)
+    expect(widgetGlassAlpha("?glass=1e999")).toBe(0)
+  })
+
+  it("names the key and the custom property the stylesheet declares", () => {
+    // Pinned as literals rather than derived from the file, so a rename in
+    // widget.css or in src/widget.ts fails here instead of silently leaving the
+    // parameter setting a property nothing reads. widget.css declares
+    // `--glass-alpha: 0` in `:root`, and that is the number this route turns.
+    expect(WIDGET_GLASS_KEY).toBe("glass")
+    expect(WIDGET_GLASS_VAR).toBe("--glass-alpha")
   })
 })
