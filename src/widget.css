@@ -489,39 +489,31 @@ body {
   box-shadow: none;
 }
 
-/* THE HOVER CUE, and it is a hairline rather than a fill. On 2026-10-01 the
-   Captain ruled "Remove the hover wash" against a `background: var(--row)` here
-   that measured 5.30:1 against its own resting pixel over a dark wallpaper, and
-   the panel has no ground to lift a hover off any more, so a wash is not
-   available even at a lower alpha.
+/* NO HOVER CUE, and that is the Captain's ruling of 2026-10-01, verbatim: "I
+   want no hover cue."
 
-   What replaces it is the one cue on this panel that paints no background: the
-   segment's own inset ring in the scheme's ink. `--text` is already the segment's
-   label colour at rest, so a hovered segment is not a different colour of
-   segment, it is the same one with a visible edge — which is also how a
-   segmented control reads as hoverable on a platform with no well under it.
+   This selector had three lives. 57a3713 washed the segment with
+   `background: var(--row)`, which measured 5.30:1 against its own resting pixel
+   over a dark wallpaper and was ruled out. 096 replaced that wash with a 1px
+   inset ring in `--text`, on the reasoning that a hairline strengthens the line
+   already there without painting a background. 097 thickened the ring to 2px and
+   measured why that bought nothing: a line's contrast against its ground is its
+   ink's contrast, so 1px and 2px measure identically, and `--text` reaches at
+   most 1.16:1 against the best pixel inside the control's own box. Five of
+   sixteen cells could not clear 1.2:1 with any token in this file, because
+   `--text` and `--seg-on` trade places between light and dark grounds. 097's own
+   report says it: "I have made an invisible cue thicker and I am not claiming
+   otherwise."
 
-   Inset, not an outline, for the same reason `.w-seg:focus-visible` below is:
-   an outside ring would be clipped by
-   `nav.w-range`'s `overflow: hidden` and by the panel's own padding, and the
-   selected cap's own three-layer `box-shadow` would have to be rewritten to make
-   room for it. Drawn inside, the hover adds one layer and displaces nothing, so
-   no geometry moves. */
-.w-seg:hover:not(.is-on) {
-  box-shadow:
-    inset 0 0 0 1px var(--text),
-    inset -0.5px 0 0 var(--glass-line);
-}
+   So there is nothing left here. The segment's resting rule above keeps its own
+   divider, and `.w-seg:last-child` above still drops its own, and those two are
+   the whole of the resting appearance. The selected cap keeps its own
+   three-layer `box-shadow`; the deleted rule carried `:not(.is-on)` precisely so
+   it could never reach it, and with the rule gone nothing needs to out-
+   specialise anything.
 
-/* The divider needs this second rule, and the reason is specificity rather than
-   order. `.w-seg:hover:not(.is-on)` counts 0,3,0 — `.w-seg`, `:hover`, and the
-   `:not(.is-on)` argument all count — while `.w-seg:last-child` counts 0,2,0. So
-   the hover rule already beats the rule that drops the divider, which means a
-   hovered LAST segment would put back the 1px right-hand divider its resting
-   state does not have. 0,4,0 wins here and restores it. */
-.w-seg:last-child:hover:not(.is-on) {
-  box-shadow: inset 0 0 0 1px var(--text);
-}
+   Adding a hover declaration back to this selector needs his say-so.
+   `:focus-visible` below is untouched and is a different state. */
 
 /* The cap. An inset highlight rather than a flat fill, and a 1px drop so it
    sits above the well instead of being a hole in it. */
@@ -1247,28 +1239,28 @@ body {
   cursor: pointer;
 }
 
-/* THE HOVER CUE, the same decision as `.w-seg:hover` above and for the same
-   reason: on 2026-10-01 the Captain ruled "Remove the hover wash" against the
-   `background: var(--row)` that used to be here, which measured 5.30:1 against
-   its own resting pixel over a dark wallpaper in the light scheme. These
-   controls already carry a 1px rim in `--glass-line` from the shared rule
-   above, so the rim is the cue: it goes to full-strength `--text` under the
-   pointer and paints no ground.
+/* NO HOVER CUE, the same ruling and the same reason as `.w-seg:hover` above: the
+   Captain's words on 2026-10-01 were "I want no hover cue."
 
-   `border-color` rather than `border`, so the 1px width is untouched and no box
-   resizes — the panel's vertical budget has 4.78px of slack at its worst and a
-   hover that moved a row would spend it. `--row` is the well this replaces and
-   nothing else reads it now; see its comment in `:root`.
+   57a3713 gave these four controls `background: var(--row)` on hover, 5.30:1
+   against their own resting pixel over a dark wallpaper in the light scheme, and
+   the Captain ruled the wash out. 096 put the cue on the rim instead,
+   `border-color: var(--text)`, and 097 added the inset shadow so the rim read as
+   2px of ink without being 2px of geometry. 097 measured the ceiling at 1.16:1
+   and said in its own report that it had made an invisible cue thicker.
 
-   `.w-quit:hover` keeps `:not(:disabled)` and `:not(.is-armed)` and `.w-retry`
-   and `.w-start` keep `:not(.is-armed)`, so the armed states still read as armed
-   under the pointer, exactly as the background rule did. */
-.w-quit:hover:not(:disabled):not(.is-armed),
-.w-retry:hover:not(.is-armed),
-.w-start:hover:not(.is-armed),
-.w-open:hover {
-  border-color: var(--text);
-}
+   The rule is deleted rather than emptied, so the four selectors with it. What
+   remains above is the shared resting rule: 1px `--glass-line` rim, `--text`
+   label, and `cursor: pointer`. A pointer still says the control is clickable,
+   which is not a hover cue and was never one.
+
+   The old `:not(:disabled)` and `:not(.is-armed)` arguments existed to keep the
+   armed and disabled states reading as themselves under a pointer. They are not
+   needed now, because the rule that would have overridden them is gone rather
+   than weakened. `.w-quit.is-armed` and `.w-start.is-armed` keep their own
+   `border-color` in `--bad` and `--accent` and `.w-quit.is-sent` keeps
+   `pointer-events: none`; all three are asserted under a real pointer in the
+   mission report. */
 
 .w-quit.is-armed {
   border-color: var(--bad);
