@@ -208,9 +208,19 @@
      regaining one. Dividing by 0.84 first keeps 0.84 exact rather than a
      rounded fraction of it. */
   --row-ground: rgba(255, 255, 255, calc(var(--glass-alpha) / 0.84 * 0.06));
-  /* The hover well, and the ONLY thing `--row` is for now that the tables have
-     their own ground token. A hover is a transient state under the pointer and
-     the reader is never reading it for long, so it keeps the tint it had. */
+  /* THE HOVER WELL, RETIRED 2026-10-01, and the token is kept on purpose.
+
+     On 2026-10-01 the Captain was shown this painted 116/255 under a pointer in
+     the light scheme — 5.30:1 against the pixel the control rests on, measured
+     with a real pointer — and ruled: "Remove the hover wash". The panel has no
+     ground to lift a hover off any more, so a hover cannot be a wash here.
+
+     The value is left alone rather than zeroed, and no rule reads it any more.
+     `--glass` and `--row-ground` above are the two dials that follow
+     `--glass-alpha`; this one never was, so setting it back is not a dial anyone
+     can turn. It stays as the record of what the wash was, and a future rule
+     that wants a well under a pointer on a panel that HAS a ground can reach for
+     it. Deleting the two lines is a separate decision and not this one. */
   --row: rgba(255, 255, 255, 0.06);
   --seg: rgba(255, 255, 255, 0.08);
   --seg-on: rgba(255, 255, 255, 0.94);
@@ -241,6 +251,11 @@
     --glass: rgba(250, 251, 253, var(--glass-alpha));
     --glass-line: rgba(0, 0, 0, 0.13);
     --row-ground: rgba(255, 255, 255, calc(var(--glass-alpha) / 0.84 * 0.5));
+    /* 0.5 is the value the Captain saw and rejected: 116/255 under a pointer over
+       a dark wallpaper, 5.30:1 against the pixel the control rests on. Kept, and
+       unread, for the same reason as the dark scheme's `--row`: it is the record
+       of what the wash was rather than a dial, and this is the number the ruling
+       is about. */
     --row: rgba(255, 255, 255, 0.5);
     --seg: rgba(0, 0, 0, 0.055);
     --seg-on: rgba(255, 255, 255, 0.98);
@@ -474,8 +489,38 @@ body {
   box-shadow: none;
 }
 
+/* THE HOVER CUE, and it is a hairline rather than a fill. On 2026-10-01 the
+   Captain ruled "Remove the hover wash" against a `background: var(--row)` here
+   that measured 5.30:1 against its own resting pixel over a dark wallpaper, and
+   the panel has no ground to lift a hover off any more, so a wash is not
+   available even at a lower alpha.
+
+   What replaces it is the one cue on this panel that paints no background: the
+   segment's own inset ring in the scheme's ink. `--text` is already the segment's
+   label colour at rest, so a hovered segment is not a different colour of
+   segment, it is the same one with a visible edge — which is also how a
+   segmented control reads as hoverable on a platform with no well under it.
+
+   Inset, not an outline, for the same reason `.w-seg:focus-visible` below is:
+   an outside ring would be clipped by
+   `nav.w-range`'s `overflow: hidden` and by the panel's own padding, and the
+   selected cap's own three-layer `box-shadow` would have to be rewritten to make
+   room for it. Drawn inside, the hover adds one layer and displaces nothing, so
+   no geometry moves. */
 .w-seg:hover:not(.is-on) {
-  background: var(--row);
+  box-shadow:
+    inset 0 0 0 1px var(--text),
+    inset -0.5px 0 0 var(--glass-line);
+}
+
+/* The divider needs this second rule, and the reason is specificity rather than
+   order. `.w-seg:hover:not(.is-on)` counts 0,3,0 — `.w-seg`, `:hover`, and the
+   `:not(.is-on)` argument all count — while `.w-seg:last-child` counts 0,2,0. So
+   the hover rule already beats the rule that drops the divider, which means a
+   hovered LAST segment would put back the 1px right-hand divider its resting
+   state does not have. 0,4,0 wins here and restores it. */
+.w-seg:last-child:hover:not(.is-on) {
+  box-shadow: inset 0 0 0 1px var(--text);
 }
 
 /* The cap. An inset highlight rather than a flat fill, and a 1px drop so it
@@ -1202,11 +1247,27 @@ body {
   cursor: pointer;
 }
 
+/* THE HOVER CUE, the same decision as `.w-seg:hover` above and for the same
+   reason: on 2026-10-01 the Captain ruled "Remove the hover wash" against the
+   `background: var(--row)` that used to be here, which measured 5.30:1 against
+   its own resting pixel over a dark wallpaper in the light scheme. These
+   controls already carry a 1px rim in `--glass-line` from the shared rule
+   above, so the rim is the cue: it goes to full-strength `--text` under the
+   pointer and paints no ground.
+
+   `border-color` rather than `border`, so the 1px width is untouched and no box
+   resizes — the panel's vertical budget has 4.78px of slack at its worst and a
+   hover that moved a row would spend it. `--row` is the well this replaces and
+   nothing else reads it now; see its comment in `:root`.
+
+   `.w-quit:hover` keeps `:not(:disabled)` and `:not(.is-armed)` and `.w-retry`
+   and `.w-start` keep `:not(.is-armed)`, so the armed states still read as armed
+   under the pointer, exactly as the background rule did. */
 .w-quit:hover:not(:disabled):not(.is-armed),
 .w-retry:hover:not(.is-armed),
 .w-start:hover:not(.is-armed),
 .w-open:hover {
-  background: var(--row);
+  border-color: var(--text);
 }
 
 .w-quit.is-armed {
