@@ -17,6 +17,9 @@ import {
   WIDGET_GLASS_KEY,
   WIDGET_GLASS_VAR,
   WIDGET_MODEL_ROWS,
+  WIDGET_OFFLINE_FAILURES,
+  WIDGET_OFFLINE_IDLE,
+  WIDGET_OFFLINE_URL,
   WIDGET_OPEN_ARIA,
   WIDGET_OPEN_LABEL,
   WIDGET_OPEN_TARGET_KEY,
@@ -59,6 +62,8 @@ import {
   widgetGlassAlpha,
   widgetModels,
   widgetOfflineActions,
+  widgetOfflinePoll,
+  widgetOfflineSends,
   widgetOpenURL,
   widgetQuitDisarm,
   widgetQuitElapsed,
@@ -76,6 +81,7 @@ import {
   widgetStartView,
   widgetStats,
   widgetRangeFrom,
+  type WidgetOffline,
 } from "../src/widget"
 
 /**
@@ -1487,6 +1493,225 @@ describe("WIDGET_START_URL", () => {
 
   it("is not http, so an unhandled navigation fails instead of refetching", () => {
     expect(WIDGET_START_URL.startsWith("http")).toBe(false)
+  })
+})
+
+describe("WIDGET_OFFLINE_URL", () => {
+  it("is the exact string the oc-dashbar menu bar app has to match", () => {
+    // Pinned component by component, as for the quit and start URLs, so a rename
+    // cannot pass as a refactor and a trailing path cannot pass as the same verb.
+    // The shell path-constrains its match, so `offline/anything` would be a
+    // request nobody answers.
+    const u = new URL(WIDGET_OFFLINE_URL)
+    expect(u.protocol).toBe("oc-dash:")
+    expect(u.host).toBe("offline")
+    expect(u.pathname).toBe("")
+    expect(u.href).toBe("oc-dash://offline")
+    // The verb is the whole of the host: nothing after it.
+    expect(WIDGET_OFFLINE_URL.split("//")[1]).toBe("offline")
+  })
+
+  it("is a sibling of the other three verbs, sharing the scheme and nothing else", () => {
+    // One mechanism, four verbs, one interception point in the shell. If this
+    // scheme ever diverged the app would need a fourth delegate case, which is
+    // the reconciliation the quit URL already avoided by being written beside the
+    // others. Every host has to stay distinct or two verbs collapse into one.
+    const offline = new URL(WIDGET_OFFLINE_URL)
+    const verbs = [WIDGET_QUIT_URL, WIDGET_START_URL, widgetOpenURL("http://127.0.0.1:4021/")]
+    for (const v of verbs) {
+      expect(new URL(v).protocol).toBe(offline.protocol)
+      expect(new URL(v).host).not.toBe(offline.host)
+    }
+    // And the four hosts among themselves, which is the property the shell's
+    // four `case` statements are standing on.
+    const hosts = [...verbs, WIDGET_OFFLINE_URL].map((v) => new URL(v).host)
+    expect(new Set(hosts).size).toBe(hosts.length)
+  })
+
+  it("is not http, so an unhandled navigation fails instead of refetching", () => {
+    // Same reason as the other two: the panel is served over http from inside the
+    // very process it is asking about. An http navigation would be answered by
+    // that process rather than caught by its delegate, so an old shell that never
+    // matches would silently reload the panel instead of leaving it alone.
+    expect(WIDGET_OFFLINE_URL.startsWith("http")).toBe(false)
+  })
+})
+
+describe("WIDGET_OFFLINE_FAILURES", () => {
+  it("is 2, so a single missed poll during a restart cannot blank the panel", () => {
+    // The Captain restarts `npm run dev` routinely, and a restart is a refused
+    // connection. At 1 every restart would throw his panel out to the help page,
+    // which is the worst available outcome for a control whose job is to notice
+    // something he would have noticed anyway. Pinned as a literal and not as a
+    // range, because the Officer set this number and the Captain is the person
+    // who changes it.
+    expect(WIDGET_OFFLINE_FAILURES).toBe(2)
+  })
+
+  it("costs about a minute of real loss at the panel's poll cadence", () => {
+    // The reason two is not arbitrary: it is read in the reader's units, and a
+    // threshold nobody can translate into seconds is a threshold nobody can
+    // decide to shorten.
+    expect(WIDGET_OFFLINE_FAILURES * WIDGET_POLL_MS).toBe(60_000)
+  })
+})
+
+describe("the offline verb's latch", () => {
+  /**
+   * Replays a sequence of poll outcomes and returns what each poll emitted: 1 for
+   * the poll that navigated, 0 for the ones that did not.
+   *
+   * This is the harness the three required behaviours are all properties of. The
+   * panel's only job here is the transition, so a sequence is the honest unit of
+   * assertion rather than a single state.
+   */
+  function runPolls(outcomes: boolean[]): number[] {
+    let s: WidgetOffline = WIDGET_OFFLINE_IDLE
+    return outcomes.map((reachable) => {
+      const next = widgetOfflinePoll(s, reachable)
+      const emitted = widgetOfflineSends(s, next) ? 1 : 0
+      s = next
+      return emitted
+    })
+  }
+
+  it("emits nothing until two polls in a row have failed", () => {
+    // One failed poll is a blip, and swapping the whole document on a blip is
+    // worse than the blip. Asserted on the prefix rather than on the whole
+    // sequence so the threshold cannot drift to 1 without the first case failing.
+    expect(runPolls([true, false])).toEqual([0, 0])
+    expect(runPolls([true, false, false])).toEqual([0, 0, 1])
+  })
+
+  it("emits once per loss, not once per failed poll", () => {
+    // Behaviour 1. The fifth and sixth polls below are as dead as the third, and
+    // an old shell that never matched `offline` leaves the panel sitting there
+    // failing forever, so a rule that emitted per poll would navigate on every
+    // one of them.
+    const emitted = runPolls([true, false, false, false, false, false, false])
+    expect(emitted).toEqual([0, 0, 1, 0, 0, 0, 0])
+    expect(emitted.reduce((a, b) => a + b, 0)).toBe(1)
+  })
+
+  it("emits exactly twice across a loss, a recovery and a second loss", () => {
+    // Behaviour 2, as the brief asks for it: the sequence rather than the
+    // individual state, because the latch and the reset are two different rules
+    // and only the sequence shows that they compose.
+    const emitted = runPolls([
+      true, // loads
+      false, // first missed poll
+      false, // second: emit
+      false, // still dead, already sent
+      true, // recovers: count cleared, latch disarmed
+      false, // second loss, first missed poll
+      false, // second loss, second: emit again
+      false, // still dead
+    ])
+    expect(emitted).toEqual([0, 0, 1, 0, 0, 0, 1, 0])
+    expect(emitted.reduce((a, b) => a + b, 0)).toBe(2)
+  })
+
+  it("never emits on a panel that never loaded, however long it stays down", () => {
+    // The shell already answers a failed navigation with its help page, so a verb
+    // emitted here would be a second and redundant path to the place the reader is
+    // already at. This is also the reason the latch carries `armed` separately
+    // from the panel's own `loaded`, which is true after a failed settle too.
+    expect(runPolls([false, false, false, false, false, false])).toEqual([0, 0, 0, 0, 0, 0])
+  })
+
+  it("never emits on a blip between healthy polls", () => {
+    // The case the threshold exists for, stated as the exact thing the Captain
+    // does: restart the dev server, miss one poll, get the panel back untouched.
+    expect(runPolls([true, false, true, false, true, false, true])).toEqual([
+      0, 0, 0, 0, 0, 0, 0,
+    ])
+  })
+
+  it("resets the failure count on every good poll, not only after an emission", () => {
+    // A count that survived a success would mean two failures an hour apart, with
+    // a working panel in between, blanked the panel.
+    let s: WidgetOffline = WIDGET_OFFLINE_IDLE
+    for (let i = 0; i < 10; i++) {
+      s = widgetOfflinePoll(widgetOfflinePoll(s, false), true)
+    }
+    expect(s.failures).toBe(0)
+    expect(s.sent).toBe(false)
+  })
+
+  it("arms on a good poll and disarms nothing, because the next loss can emit", () => {
+    // Deliberate and counter-intuitive next to the spawn control, whose settle
+    // takes a `sent` state back to `idle`. Here a good poll is the only thing that
+    // can make the next request possible, so it returns an ARMED state. Pinned so
+    // the name cannot be "fixed" into the other convention and quietly break the
+    // second loss.
+    expect(widgetOfflinePoll(WIDGET_OFFLINE_IDLE, true)).toEqual({
+      failures: 0,
+      armed: true,
+      sent: false,
+    })
+    const recovered = widgetOfflinePoll({ failures: 9, armed: true, sent: true }, true)
+    expect(recovered).toEqual({ failures: 0, armed: true, sent: false })
+  })
+
+  it("counts failures past the threshold rather than clamping, and holds the latch", () => {
+    // The count is the count: it is the evidence that the panel has been down for
+    // a minute, and the latch is what stops it being a navigation per poll.
+    const dead = widgetOfflinePoll({ failures: 6, armed: true, sent: true }, false)
+    expect(dead.failures).toBe(7)
+    expect(dead.sent).toBe(true)
+  })
+
+  it("starts inert, so a panel that never polls cannot emit", () => {
+    expect(WIDGET_OFFLINE_IDLE).toEqual({ failures: 0, armed: false, sent: false })
+  })
+})
+
+describe("widgetOfflineSends", () => {
+  it("emits on the armed-to-sent edge and nowhere else", () => {
+    // The emission rule as a function rather than as an `if` in the component,
+    // which is what keeps a StrictMode double-invoked updater from navigating
+    // twice and replacing the document twice.
+    const loaded = widgetOfflinePoll(WIDGET_OFFLINE_IDLE, true)
+    const first = widgetOfflinePoll(loaded, false)
+    const second = widgetOfflinePoll(first, false)
+    const third = widgetOfflinePoll(second, false)
+    expect(widgetOfflineSends(loaded, first)).toBe(false)
+    expect(widgetOfflineSends(loaded, second)).toBe(true)
+    expect(widgetOfflineSends(second, third)).toBe(false)
+    expect(widgetOfflineSends(WIDGET_OFFLINE_IDLE, loaded)).toBe(false)
+    expect(widgetOfflineSends(loaded, loaded)).toBe(false)
+  })
+})
+
+describe("the offline verb changes nothing the panel already shows", () => {
+  it("carries no view data of its own, so nothing can ride in on the latch", () => {
+    // Behaviour 3, as far as a suite with no DOM and no component tests can state
+    // it. The latch is three fields and nothing reads them but the two functions
+    // above, so "the degraded panel still says its four sentences" is a structural
+    // fact here rather than a hope about the markup.
+    expect(Object.keys(widgetOfflinePoll(WIDGET_OFFLINE_IDLE, true)).sort()).toEqual([
+      "armed",
+      "failures",
+      "sent",
+    ])
+  })
+
+  it("leaves the degraded state exactly as it was", () => {
+    // The Captain has screenshots of this state and did not ask for it to change,
+    // so the strings are pinned here as well as in their own tests. If a future
+    // change threads the latch into one of these, this goes red first.
+    const T0 = 1_700_000_000_000
+    expect(widgetRefreshText({ updatedAt: T0, unreachable: true, now: T0 })).toBe(
+      "dashboard unreachable",
+    )
+    expect(widgetHero(null)).toEqual({ cost: "—", exact: false, degraded: false, reason: null })
+    expect(widgetModels(null, {}).rows).toEqual([])
+    expect(widgetSessions(null).exact).toBe(false)
+    // Both controls, and the retry label the panel wears.
+    const offline = widgetOfflineActions(true, WIDGET_START_IDLE)
+    expect(offline?.retry.label).toBe(WIDGET_RETRY_LABEL)
+    expect(offline?.start.label).toBe(WIDGET_START_LABEL)
+    expect(offline?.start.armed || offline?.start.sent).toBe(false)
   })
 })
 

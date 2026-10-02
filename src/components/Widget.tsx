@@ -4,6 +4,8 @@ import { fetchModelNames, fetchSessions, fetchSummary } from "../api"
 import {
   MODELS_HEAD_TITLE,
   WIDGET_MODEL_ROWS,
+  WIDGET_OFFLINE_IDLE,
+  WIDGET_OFFLINE_URL,
   WIDGET_OPEN_ARIA,
   WIDGET_OPEN_LABEL,
   WIDGET_OPEN_TITLE,
@@ -32,6 +34,8 @@ import {
   widgetHero,
   widgetModels,
   widgetOfflineActions,
+  widgetOfflinePoll,
+  widgetOfflineSends,
   widgetOpenURL,
   widgetQuitDisarm,
   widgetQuitElapsed,
@@ -50,6 +54,7 @@ import {
   widgetSurfaceLine,
   widgetSurfaceRequested,
   type WidgetModelRow,
+  type WidgetOffline,
   type WidgetQuit,
   type WidgetSessionRow,
   type WidgetStart,
@@ -74,6 +79,10 @@ import {
  * - A failed fetch clears the payload rather than keeping the last good
  *   one. A glanceable panel has no banner to explain a number that might
  *   be minutes old, so a failure is a dash now and a number in 30 seconds.
+ * - It asks to be replaced, after a minute of real loss. The degraded state
+ *   below still draws, and then `oc-dash://offline` goes out and the shell puts
+ *   the help page up over it. The latch is `widgetOfflinePoll` in widget.ts, and
+ *   the emission is the one edge it names, not this component's decision.
  *
  * It does call /api/sessions, which the dashboard also calls
  * every 30 seconds. There is no per-session row in the summary payload, so
@@ -182,6 +191,17 @@ export function Widget() {
   // never poll at all if the reader worked in it.
   const current = useRef<Range>(state.range)
 
+  // The offline verb's latch, and a ref rather than `useState` where the quit
+  // and start machines are not. Nothing renders off it: the panel's degraded
+  // state says nothing about it, and the moment the verb goes out the shell
+  // replaces the whole document anyway. A `useState` here would re-render the
+  // panel every 30 seconds to change nothing a reader can see.
+  // A ref is also what keeps `refresh` free of the latch as a dependency. As
+  // state it would be a stale closure for the whole life of this `useCallback`,
+  // since the mount effect below depends on `refresh` and re-creating it would
+  // tear down and re-arm the 30s interval on every poll.
+  const lost = useRef<WidgetOffline>(WIDGET_OFFLINE_IDLE)
+
   const refresh = useCallback(async (range: Range) => {
     const mine = ++seq.current
     const now = Date.now()
@@ -206,13 +226,37 @@ export function Widget() {
     // clock of its own. `armed` is left alone on purpose, because a poll lands
     // every 30 seconds whether anyone is reading or not.
     setStart((s) => widgetStartSettled(s))
+
+    // The same settle drives the offline verb, off the SAME `unreachable` the
+    // degraded state is built from. One definition of "the dashboard did not
+    // answer" and not two: if a failed model-names call counted here but not
+    // there, the panel would ask to be replaced on a condition it had decided
+    // was not a loss.
+    const unreachable = r1.status === "rejected" || r2.status === "rejected"
+    const before = lost.current
+    const after = widgetOfflinePoll(before, !unreachable)
+    lost.current = after
+    // The handoff, and the third one in this component to be a navigation for
+    // the same reason the first two are: this page cannot reach the shell, and
+    // widget.ts's WIDGET_OFFLINE_URL names exactly what the shell has to match.
+    //
+    // Outside any state updater, deliberately. React runs updaters twice under
+    // StrictMode to surface impure ones, and every emission here replaces the
+    // entire document, so a doubled emission is not a duplicate request but a
+    // navigation the dev build makes on the Captain's live panel. The transition
+    // is read here instead and `widgetOfflineSends` is asked about it, which is
+    // what makes the emission once per loss rather than once per failed poll.
+    if (widgetOfflineSends(before, after)) {
+      window.location.assign(WIDGET_OFFLINE_URL)
+    }
+
     setState((s) => ({
       ...s,
       range,
       summary: r1.status === "fulfilled" ? r1.value : null,
       sessions: r2.status === "fulfilled" ? r2.value : null,
       loading: false,
-      unreachable: r1.status === "rejected" || r2.status === "rejected",
+      unreachable,
       // `now` and `updatedAt` come from the clock this refresh started with, not
       // from a second `Date.now()` after the awaits: three round trips on `all`
       // are 792ms apart, so the footer could otherwise read "updated just now"

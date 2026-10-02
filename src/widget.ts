@@ -49,6 +49,14 @@ import { buildTree, type SessionNode } from "./tree"
  * `widgetOfflineActions` is where the panel's own limit is written down: it can
  * see that the dashboard did not answer and it cannot see why, so it offers a
  * re-fetch and a start side by side and lets the reader pick.
+ *
+ * The fourth verb, `WIDGET_OFFLINE_URL`, is the one the panel emits about
+ * itself rather than on a press: a loaded page that loses the dashboard for two
+ * polls running asks the shell to put its help page up, and
+ * `widgetOfflinePoll` is the latch that makes it once per loss instead of once
+ * per failed poll. It is a pure function of one poll's outcome for the same
+ * reason the two arm windows are, which is that this project's tests run in node
+ * with no DOM and a rule living in the component is a rule nothing can check.
  */
 
 /** The panel's poll cadence: the project convention (App.tsx's POLL_MS). */
@@ -1116,6 +1124,126 @@ export const WIDGET_START_URL = "oc-dash://start-server"
 
 /** The poll cadence in the reader's units, so no sentence can drift from it. */
 const POLL_SECONDS = Math.round(WIDGET_POLL_MS / 1000)
+
+// ---------------------------------------------------------------------------
+// The offline verb: one emission per loss of the dashboard
+// ---------------------------------------------------------------------------
+
+/**
+ * THE FOURTH URL THE SHELL MUST INTERCEPT: `oc-dash://offline`.
+ *
+ * One constant beside the three above, and the same reason they are all here:
+ * the menu bar app on the other side has to match this string exactly, and these
+ * two projects once picked two different quit schemes and had to reconcile them
+ * afterwards. Scheme `oc-dash`, host `offline`, empty path, emitted as written.
+ *
+ * What the shell does with it is not this project's business. The page's half
+ * is the request, and the request is a main-frame navigation for the same reason
+ * `WIDGET_QUIT_URL` is: a WKWebView has no process table and no way to reach
+ * `NSApplication`, so anything the page does is a request the host process
+ * serves rather than one it obeys. WebKit consults the navigation delegate
+ * before the system does, so no `CFBundleURLTypes` entry is needed for the app
+ * to see it, and the scheme is not http, so an older shell that never matches
+ * leaves the panel exactly where it was.
+ */
+export const WIDGET_OFFLINE_URL = "oc-dash://offline"
+
+/**
+ * How many polls in a row have to fail before the verb goes out: 2.
+ *
+ * THIS NUMBER IS THE OFFICER'S CALL, made because the Captain was asked and did
+ * not answer. It is here, named, because the person who can change it is the
+ * person who runs `npm run dev` and restarts it routinely: this is the Captain's
+ * constant to change, and the test below pins the reason it is not 1.
+ *
+ * Why not 1. The Captain restarts the dev server constantly, and a restart is
+ * a refused connection. At 1, every single restart blanks his panel and throws
+ * him out to the help page, which is the worst possible outcome for a control
+ * whose whole job is to notice something he would have noticed anyway. A blip
+ * has to be survivable.
+ *
+ * Why 2 rather than 3 or more. One poll is `WIDGET_POLL_MS`, 30 seconds, so two
+ * consecutive failures is about a minute of the dashboard being genuinely gone.
+ * That is past the point where the panel is showing him nothing useful, since a
+ * failed settle prints a dashed hero and two empty tables, and it is well
+ * inside the point where he would give up on the popover and go and look. The
+ * cost of being wrong in the direction of 1 is a blanked panel on a restart; the
+ * cost of being wrong in the direction of 3 is a minute of a dead panel. The
+ * first is the one he cannot undo and the second is not, so 2.
+ */
+export const WIDGET_OFFLINE_FAILURES = 2
+
+export interface WidgetOffline {
+  /** Consecutive polls that did not reach the dashboard. A good poll zeroes it. */
+  failures: number
+  /**
+   * True once a poll has actually reached the dashboard.
+   *
+   * This is what "a loaded page losing the dashboard" means, kept as a value
+   * rather than as a reading of `state.loaded` in the component, because the two
+   * are NOT the same thing and the difference is a rule. `state.loaded` is true
+   * after the first settle of any outcome, including a failed one, so it would
+   * say "loaded" about a panel that has never shown a figure. A page that never
+   * got the dashboard has not lost it, so this stays false and the verb stays in
+   * its pocket.
+   */
+  armed: boolean
+  /** True from the moment the verb goes out until a poll recovers. The latch. */
+  sent: boolean
+}
+
+/** The state before the first poll, and the only value here that is a constant. */
+export const WIDGET_OFFLINE_IDLE: WidgetOffline = { failures: 0, armed: false, sent: false }
+
+/**
+ * The state one poll's outcome produces.
+ *
+ * Four rules, and each has a wrong answer worth writing down.
+ *
+ * - A poll that reached the dashboard returns `{ failures: 0, armed: true,
+ *   sent: false }`. Recovery resets both the count and the latch, which is the
+ *   whole of behaviour 2: losing the dashboard a second time emits again. Note
+ *   that recovery ARMS rather than disarming. The name reads backwards against
+ *   the launch control's `sent`, which is why it is worth saying: for the spawn
+ *   a settle ends a request the reader made, for this one a settle is the only
+ *   thing that can make the next request possible.
+ * - A failed poll counts, and `failures` keeps counting past the threshold. The
+ *   count is the count.
+ * - A failed poll on a panel that has never loaded does nothing at all but
+ *   count. The shell already answers a failed navigation with its help page,
+ *   so emitting here would be a second and redundant path to the same
+ *   destination, and one that fires on the panel's schedule rather than on the
+ *   navigation the shell is already handling.
+ * - A failed poll on a panel that has already sent does not clear the latch.
+ *   This is behaviour 1, and it is why `widgetStartPress` hands a `sent` state
+ *   back untouched rather than re-arming: the emission is once per loss, not
+ *   once per failed poll.
+ */
+export function widgetOfflinePoll(off: WidgetOffline, reachable: boolean): WidgetOffline {
+  if (reachable) return { failures: 0, armed: true, sent: false }
+  const failures = off.failures + 1
+  if (off.sent) return { failures, armed: off.armed, sent: true }
+  return {
+    failures,
+    armed: off.armed,
+    sent: off.armed && failures >= WIDGET_OFFLINE_FAILURES,
+  }
+}
+
+/**
+ * True only on the armed-to-sent edge, which is the only moment the URL goes out.
+ *
+ * The same shape and the same reason as `widgetStartSends`, one line below the
+ * other and for the same reason: React runs state updaters twice under
+ * StrictMode, so a rule that lives in the component's render path is a rule that
+ * a dev build can fire twice. Here it is worse than twice, because every
+ * emission replaces the whole document.
+ *
+ * So the component reads the transition, asks this, and only then navigates.
+ */
+export function widgetOfflineSends(off: WidgetOffline, next: WidgetOffline): boolean {
+  return !off.sent && next.sent
+}
 
 // ---------------------------------------------------------------------------
 // The third verb, and the one that is not about the shell at all: opening the
