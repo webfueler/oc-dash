@@ -53,7 +53,7 @@ so a reader never sees half a record.
 ```
 { "port": 4022, "pid": 54923,
   "url": "http://127.0.0.1:4022",
-  "version": "0.1.11" }
+  "version": "0.1.12" }
 ```
 
 `version` is `appVersion()` in `server/registry.ts`, read from the manifest, so
